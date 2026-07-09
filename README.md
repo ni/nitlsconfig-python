@@ -1,15 +1,47 @@
-# GitHub Repo Template
+# pypi-nitlsconfig
 
-GitHub Repo Template is a template for creation of open source projects made
-available on GitHub. It includes a permissive open source license, a developer
-certificate of origin, and a pull request template. This provides everything
-necessary to have a properly licensed open source project.
+Python API that reads nitlsconfig configurations through `nitlsconfig` command line.
 
-## Using GitHub Repo Template
+## Runtime dependencies
 
-1. Clone or download this repository.
-2. Copy its contents into your project (including the hidden .github directory). 
-3. Customize each file to suit your project's needs (including the README). Look through the files for "TODO" and \<reponame\>, and replace with content appropriate to your project.
-4. (Optional) Check out [GitHub Template Guidelines](https://github.com/cezaraugusto/github-template-guidelines) for ideas about how to customize your project.
+- nitlsconfig executable, discoverable, or explicit path to NITLSCONFIG_CLI
 
-TODO: describe a project in detail, what it does, how to use it, etc.
+## Install
+
+- pip install nitlsconfig
+
+## Usage
+```python
+import nitlsconfig
+
+# List configured services
+clients = nitlsconfig.ClientConfig.list()
+servers = nitlsconfig.ServerConfig.list()
+
+# Read one client configuration
+client_info = nitlsconfig.ClientConfig("ni-mqtt")
+print(client_info.service_name)
+print(client_info.certificate_mode)
+print(client_info.certificate_chain_location.scheme)
+print(client_info.certificate_chain_location.path)
+print(client_info.certificate_chain_contents)
+
+# Read one server configuration
+server_info = nitlsconfig.ServerConfig("ni-windows")
+print(server_info.service_name)
+print(server_info.certificate_mode)
+print(server_info.client_mode)
+print(server_info.certificate_chain_location.scheme)
+print(server_info.certificate_key_location.scheme)
+print(server_info.trusted_certificates_location.scheme)
+print(server_info.trusted_certificates_contents)
+print(server_info.certificate_key_contents)
+
+# Enumerate trusted certificates
+for cert in server_info.trusted_certificates:
+    print(cert.display_name)
+    print(cert.trusted_certificate_location.path)
+    print(cert.trusted_certificate_contents)
+```
+
+

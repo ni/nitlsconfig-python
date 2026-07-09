@@ -1,1 +1,0 @@
-nitlsconfig.exe --output-format=json server batch-read raw display_name_en conf certificate_mode conf certificate_chain_location conf certificate_chain_contents conf trusted_certificates_location conf trusted_certificates_contents > test_server.json
