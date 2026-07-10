@@ -4,9 +4,10 @@ import json
 import pathlib
 import platform
 
+import pytest
+
 import nitlsconfig
 import nitlsconfig.cli as nitlsconfig_cli
-import pytest
 
 TEST_DIR = pathlib.Path(__file__).resolve().parents[0]
 CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
