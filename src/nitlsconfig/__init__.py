@@ -16,6 +16,7 @@ from nitlsconfig.cli import (
     ServerClientMode,
     ServerConfig,
     TrustedCertificateData,
+    KnownServerData,
 )
 
 try:
@@ -38,4 +39,5 @@ __all__ = [
     "CommandFailedError",
     "InvalidOutputError",
     "TrustedCertificateData",
+    "KnownServerData",
 ]

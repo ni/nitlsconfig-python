@@ -10,7 +10,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, TypeVar
 
 import orjson
 
@@ -182,7 +182,10 @@ class CertificateLocation:
         return self.to_string()
 
 
-def _parse_enum(value: str, enum_cls: type[Enum], unknown_member: Enum) -> Enum:
+EnumT = TypeVar("EnumT", bound=Enum)
+
+
+def _parse_enum(value: str, enum_cls: type[EnumT], unknown_member: EnumT) -> EnumT:
     "Parse a string value into an Enum member, returning unknown_member if not found."
     try:
         return enum_cls(value)
@@ -291,11 +294,12 @@ def run_nitlsconfig_command(
             timeout=30,
         )
     except FileNotFoundError as ex:
-        fallback_executable = os.environ.get(NITLSCONFIG_CLI_ENV_VAR)
-        if fallback_executable and fallback_executable != executable:
+        fallback_root = os.environ.get(NITLSCONFIG_CLI_ENV_VAR)
+        if fallback_root and fallback_root != executable:
             suffix = ".exe" if platform.system().lower() == "windows" else ""
-            fallback_executable = pathlib.Path(fallback_executable) / f"nitlsconfig{suffix}"
-            fallback_argv = [str(fallback_executable), *command_args]
+            fallback_executable = pathlib.Path(fallback_root) / f"nitlsconfig{suffix}"
+            fallback_executable_str = str(fallback_executable)
+            fallback_argv = [fallback_executable_str, *command_args]
             try:
                 completed = subprocess.run(
                     fallback_argv,
@@ -308,7 +312,7 @@ def run_nitlsconfig_command(
             except FileNotFoundError as fallback_ex:
                 raise ExecutableNotFoundError(
                     "Unable to find nitlsconfig executable. "
-                    f"Tried {executable!r} and {NITLSCONFIG_CLI_ENV_VAR}={fallback_executable!r}."
+                    f"Tried {executable!r} and {NITLSCONFIG_CLI_ENV_VAR}={fallback_root!r}."
                 ) from fallback_ex
         else:
             raise ExecutableNotFoundError(
@@ -396,7 +400,7 @@ class _BaseConfig:
         self._data = self._find_service_data(service_name)
 
     @classmethod
-    def list(cls) -> list[str]:
+    def list_services(cls) -> list[str]:
         return _list_services(cls._scope)
 
     @classmethod
@@ -410,7 +414,7 @@ class _BaseConfig:
                 return item
 
         # Keep behavior compatible with minimal list-only service entries.
-        if service_name in cls.list():
+        if service_name in cls.list_services():
             return ServiceData(raw={"service_name": service_name})
 
         raise InvalidOutputError(f"Service not found: {service_name!r}")
@@ -512,9 +516,9 @@ class ClientConfig(_BaseConfig):
         )
 
     @property
-    def known_servers(self) -> list[dict]:
+    def known_servers(self) -> list[KnownServerData]:
         "Return the raw known_servers list from the service configuration."
-        return [item.raw for item in self._data.known_servers]
+        return self._data.known_servers
 
     @property
     def certificate_chain_contents(self) -> str:
@@ -551,7 +555,7 @@ def nitlsconfig_main(argv: Optional[list[str]] = None) -> int:
     try:
         if args.command == "list":
             config_cls = ClientConfig if args.scope == "client" else ServerConfig
-            for service in config_cls.list():
+            for service in config_cls.list_services():
                 print(service)
             return 0
     except NitlsconfigCliError as ex:

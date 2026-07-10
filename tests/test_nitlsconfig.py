@@ -3,6 +3,7 @@
 import json
 import pathlib
 import platform
+from typing import Mapping, TypedDict
 
 import pytest
 
@@ -14,7 +15,14 @@ CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
 SERVER_FIXTURE_PATH = TEST_DIR / "nitlsconfig_server.json"
 
 
-def _service_names(payload: dict, scope: str) -> list[str]:
+class NitlsconfigJsonFixtures(TypedDict):
+    client_json: str
+    server_json: str
+    client_list: str
+    server_list: str
+
+
+def _service_names(payload: Mapping[str, object], scope: str) -> list[str]:
     services = payload.get(scope, [])
     if not isinstance(services, list):
         return []
@@ -26,7 +34,7 @@ def _service_names(payload: dict, scope: str) -> list[str]:
 
 
 @pytest.fixture(scope="session")
-def nitlsconfig_json_fixtures() -> dict[str, object]:
+def nitlsconfig_json_fixtures() -> NitlsconfigJsonFixtures:
     client_json = CLIENT_FIXTURE_PATH.read_text(encoding="utf-8")
     server_json = SERVER_FIXTURE_PATH.read_text(encoding="utf-8")
 
@@ -46,8 +54,11 @@ def nitlsconfig_json_fixtures() -> dict[str, object]:
 
 
 @pytest.fixture(autouse=True)
-def mock_nitlsconfig_command(monkeypatch, nitlsconfig_json_fixtures):
-    command_responses = {
+def mock_nitlsconfig_command(
+    monkeypatch: pytest.MonkeyPatch,
+    nitlsconfig_json_fixtures: NitlsconfigJsonFixtures,
+) -> None:
+    command_responses: dict[tuple[str, ...], str] = {
         nitlsconfig_cli.build_list_command("client"): nitlsconfig_json_fixtures["client_list"],
         nitlsconfig_cli.build_list_command("server"): nitlsconfig_json_fixtures["server_list"],
         nitlsconfig_cli.build_batch_read_command("client"): nitlsconfig_json_fixtures[
@@ -58,7 +69,7 @@ def mock_nitlsconfig_command(monkeypatch, nitlsconfig_json_fixtures):
         ],
     }
 
-    def fake_run_nitlsconfig_command(command_args):
+    def fake_run_nitlsconfig_command(command_args: tuple[str, ...]) -> str:
         if command_args in command_responses:
             return command_responses[command_args]
         raise AssertionError(f"Unexpected nitlsconfig command args: {command_args!r}")
@@ -70,16 +81,16 @@ def mock_nitlsconfig_command(monkeypatch, nitlsconfig_json_fixtures):
     )
 
 
-def test_list_client():
+def test_list_client() -> None:
     """Test list_client."""
-    client_list = nitlsconfig.ClientConfig.list()
+    client_list = nitlsconfig.ClientConfig.list_services()
     assert "ni-test" in client_list
     assert "ni-mqtt" in client_list
 
 
-def test_list_server():
+def test_list_server() -> None:
     """Test list_server."""
-    server_list = nitlsconfig.ServerConfig.list()
+    server_list = nitlsconfig.ServerConfig.list_services()
     assert "ni-test" in server_list
     is_linux = platform.system().lower() == "linux"
     if is_linux:
@@ -88,7 +99,7 @@ def test_list_server():
         assert "ni-windows" in server_list
 
 
-def test_client_info():
+def test_client_info() -> None:
     """Test client_info."""
     client_info = nitlsconfig.ClientConfig("ni-test")
 
@@ -104,7 +115,7 @@ def test_client_info():
     assert "END CERTIFICATE" in client_info.certificate_chain_contents
 
 
-def test_server_info():
+def test_server_info() -> None:
     """Test server_info."""
     server_info = nitlsconfig.ServerConfig("ni-test")
     assert server_info.service_name == "ni-test"
