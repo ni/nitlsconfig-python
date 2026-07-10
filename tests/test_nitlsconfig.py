@@ -8,9 +8,9 @@ import nitlsconfig
 import nitlsconfig.cli as nitlsconfig_cli
 import pytest
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[0]
-CLIENT_FIXTURE_PATH = REPO_ROOT / "nitlsconfig_client.json"
-SERVER_FIXTURE_PATH = REPO_ROOT / "nitlsconfig_server.json"
+TEST_DIR = pathlib.Path(__file__).resolve().parents[0]
+CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
+SERVER_FIXTURE_PATH = TEST_DIR / "nitlsconfig_server.json"
 
 
 def _service_names(payload: dict, scope: str) -> list[str]:

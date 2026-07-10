@@ -43,5 +43,5 @@ Search open/closed issues before submitting. Someone may have reported the same 
 
 <!--- Include as many relevant details as possible about the environment you experienced the bug in -->
 
-* `nipanel` version
+* `pypi-nitlsconfig` version
 * Python version
