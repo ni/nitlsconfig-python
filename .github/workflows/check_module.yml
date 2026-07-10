@@ -1,12 +1,12 @@
-name: Check nipanel
+name: Check python module
 
 on:
   workflow_call:
   workflow_dispatch:
 
 jobs:
-  check_nipanel:
-    name: Check nipanel
+  check_python_module:
+    name: Check python module
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -27,4 +27,4 @@ jobs:
         with:
           install-args: "--with examples"
       - name: Bandit security checks
-        run: poetry run bandit -c pyproject.toml -r src/nipanel
+        run: poetry run bandit -c pyproject.toml -r src/nitlsconfig

@@ -29,11 +29,11 @@ jobs:
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: .venv
-          key: nipanel-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('poetry.lock') }}
-      - name: Install nipanel
+          key: nitlsconfig-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('poetry.lock') }}
+      - name: Install nitlsconfig
         run: poetry install -v
       - name: Run unit tests and code coverage
-        run: poetry run pytest ./tests/unit -v --cov=nipanel --junitxml=test_results/nipanel-${{ matrix.os }}-py${{ matrix.python-version }}.xml
+        run: poetry run pytest ./tests/unit -v --cov=nitlsconfig --junitxml=test_results/nitlsconfig-${{ matrix.os }}-py${{ matrix.python-version }}.xml
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
