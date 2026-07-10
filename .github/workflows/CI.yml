@@ -9,15 +9,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  check_nipanel:
-    name: Check nipanel
-    uses: ./.github/workflows/check_nipanel.yml
+  check_python_module:
+    name: Check python module
+    uses: ./.github/workflows/check_module.yml
   check_docs:
     name: Check docs
     uses: ./.github/workflows/check_docs.yml
   checks_succeeded:
     name: Checks succeeded
-    needs: [check_nipanel, check_docs]
+    needs: [check_python_module, check_docs]
     runs-on: ubuntu-latest
     steps:
       - run: exit 0
