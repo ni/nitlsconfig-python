@@ -16,6 +16,8 @@ SERVER_FIXTURE_PATH = TEST_DIR / "nitlsconfig_server.json"
 
 
 class NitlsconfigJsonFixtures(TypedDict):
+    """Data from nitlsconfig*.json fixtures."""
+
     client_json: str
     server_json: str
     client_list: str
