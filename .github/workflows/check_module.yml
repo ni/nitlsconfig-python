@@ -25,6 +25,6 @@ jobs:
       - name: Analyze Python Project
         uses: ni/python-actions/analyze-project@aa64e60612cb078b0c2ada666becbd70d4817d55 # 0.7.1
         with:
-          install-args: "--with tests --with docs"
+          install-args: "--with test --with lint"
       - name: Bandit security checks
         run: poetry run bandit -c pyproject.toml -r src/nitlsconfig
