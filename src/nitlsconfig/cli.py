@@ -6,7 +6,7 @@ import argparse
 import os
 import pathlib
 import platform
-import subprocess
+import subprocess  # nosec B404 - required to invoke the trusted nitlsconfig CLI
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
@@ -292,7 +292,7 @@ def run_nitlsconfig_command(
             text=True,
             check=False,
             timeout=30,
-        )
+        )  # nosec B603 - argv is passed shell-free and executable selection is controlled
     except FileNotFoundError as ex:
         fallback_root = os.environ.get(NITLSCONFIG_CLI_ENV_VAR)
         if fallback_root and fallback_root != executable:
@@ -307,7 +307,7 @@ def run_nitlsconfig_command(
                     text=True,
                     check=False,
                     timeout=30,
-                )
+                )  # nosec B603 - argv is passed shell-free and fallback path is explicit
                 argv = fallback_argv
             except FileNotFoundError as fallback_ex:
                 raise ExecutableNotFoundError(
