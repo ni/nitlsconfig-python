@@ -45,7 +45,7 @@ htmlhelp_basename = f"{project}doc"
 # tell autoapi to doc the public options
 autoapi_options = list(autoapi.extension._DEFAULT_OPTIONS)
 autoapi_options.remove("private-members")  # note: remove this to include "_" members in docs
-autoapi_dirs = [root_path / "src" / "nipanel"]
+autoapi_dirs = [root_path / "src" / "nitlsconfig"]
 autoapi_type = "python"
 autodoc_typehints = "description"
 
@@ -56,7 +56,7 @@ def skip_aliases(app, what, name, obj, skip, options):
     """Skip documentation for classes that are exported from multiple modules."""
     # For names that are defined in a private sub-module and aliased into a
     # public package, hide the definition.
-    if name.startswith("nipanel._"):
+    if name.startswith("nitlsconfig._"):
         skip = True
 
     return skip
@@ -74,14 +74,6 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 
 intersphinx_mapping = {
-    "grpc": ("https://grpc.github.io/grpc/python/", None),
-    "measurement-plugin-python": (
-        "https://measurement-plugin-python.readthedocs.io/en/latest/",
-        None,
-    ),
-    "nitypes": ("https://nitypes.readthedocs.io/en/latest/", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "protobuf": ("https://googleapis.dev/python/protobuf/latest/", None),
     "python": ("https://docs.python.org/3", None),
 }
 
