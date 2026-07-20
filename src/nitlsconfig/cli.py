@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import pathlib
 import platform
@@ -11,8 +12,6 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional, Tuple, TypeVar
-
-import orjson
 
 ALLOWED_SCOPES: Tuple[str, ...] = ("client", "server")
 
@@ -307,7 +306,7 @@ def run_nitlsconfig_command(
                     text=True,
                     check=False,
                     timeout=30,
-                )  # nosec B603 - argv is passed shell-free and fallback path is explicit
+                )  # nosec B603 - argv is passed shell-free and fallback executable is explicit
                 argv = fallback_argv
             except FileNotFoundError as fallback_ex:
                 raise ExecutableNotFoundError(
@@ -342,8 +341,8 @@ def run_nitlsconfig_json_command(
     )
 
     try:
-        return orjson.loads(stdout)
-    except orjson.JSONDecodeError as ex:
+        return json.loads(stdout)
+    except json.JSONDecodeError as ex:
         snippet = stdout[:240].replace("\n", "\\n")
         raise InvalidOutputError(
             "Failed to parse nitlsconfig JSON output. " f"Command output starts with: {snippet!r}"
