@@ -1,7 +1,5 @@
 "Python package to read settings from nitlsconfig."
 
-from importlib.metadata import PackageNotFoundError, version
-
 from nitlsconfig.cli import (
     CertificateLocation,
     ClientCertMode,
@@ -18,11 +16,6 @@ from nitlsconfig.cli import (
     TrustedCertificateData,
     KnownServerData,
 )
-
-try:
-    __version__ = version("nitlsconfig")
-except PackageNotFoundError:
-    __version__ = "0.0.0"
 
 __all__ = [
     "__version__",
