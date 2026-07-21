@@ -1,11 +1,11 @@
-# Contributing to \<reponame\> 
+# Contributing to pypi-nitlsconfig
 
-Contributions to \<reponame\> are welcome from all!
+Contributions to pypi-nitlsconfig are welcome from all!
 
-\<reponame\> is managed via [git](https://git-scm.com), with the canonical upstream
-repository hosted on [GitHub](https://github.com/ni/<reponame>/).
+pypi-nitlsconfig is managed via [git](https://git-scm.com), with the canonical upstream
+repository hosted on [GitHub](https://github.com/ni/pypi-nitlsconfig/).
 
-\<reponame\> follows a pull-request model for development.  If you wish to
+pypi-nitlsconfig follows a pull-request model for development.  If you wish to
 contribute, you will need to create a GitHub account, fork this project, push a
 branch with your changes to your project, and then submit a pull request.
 
@@ -21,11 +21,63 @@ See [GitHub's official documentation](https://help.github.com/articles/using-pul
 
 # Getting Started
 
-- TODO: include build steps here.
+To contribute to this project, it is recommended that you follow these steps:
+
+1. Ensure you have poetry installed.
+1. Fork the repository on GitHub.
+1. Install `pypi-nitlsconfig` dependencies using `poetry install`.
+1. Run the regression tests on your system (see Testing section). At this point, if any tests fail, do not begin development. Try to investigate these failures. If you're unable to do so, report an issue through our [GitHub issues page](https://github.com/ni/pypi-nitlsconfig/issues).
+1. Write new tests that demonstrate your bug or feature. Ensure that these new tests fail.
+1. Make your change.
+1. Run all the regression tests again (including the tests you just added), and confirm that they all pass.
+1. Run `poetry run nps lint` to check that the updated code follows NI's Python coding conventions. If this reports errors, first run `poetry run nps fix` in order to sort imports and format the code with Black, then manually fix any remaining errors.
+1. Run `poetry run mypy` to statically type-check the updated code.
+1. Send a GitHub Pull Request to the main repository's main branch. GitHub Pull Requests are the expected method of code collaboration on this project.
 
 # Testing
 
-- TODO: include testing steps here.
+## Simple development loop
+
+```
+# Create a new branch
+git fetch
+git switch --create users/{username}/{branch-purpose} origin/main
+
+# Install the project dependencies
+poetry install
+
+# ✍ Make source changes
+
+# Run the analyzers -- see files in .github/workflows for details
+poetry run nps lint
+poetry run mypy
+poetry run bandit -c pyproject.toml -r src/nitlsconfig
+
+# Apply safe fixes
+poetry run nps fix
+
+# Run the tests
+poetry run pytest -v
+```
+
+# Publishing on PyPI
+
+You can publish the nitlsconfig package by creating a GitHub release
+in the pypi-nitlsconfig repo. Here are the steps to follow to publish the package:
+
+1. From the main GitHub repo page, select "Create a new release".
+2. On the "New Release" page, create a new tag using the "Select Tag" drop down. The tag must be the package version, matching the value found in pyproject.toml. Example: `1.0.0`.
+3. Enter a title in the "Release title" field. The title should contain the package name and version in the format `pypi-nitlsconfig <package-version>`. For example: `pypi-nitlsconfig 1.0.0`.
+4. Click "Generate release notes" and edit the release notes.
+  - Delete entries for PRs that do not affect users, such as "chore(deps):" and "fix(deps):" PRs.
+  - Consider grouping related entries.
+  - Reformat entries to be more readable. For example, change "Blah blah by so-and-so in \#123" to "Blah blah (\#123)".
+5. If this is a pre-release release, check the "Set as a pre-release" checkbox.
+6. Click "Publish release".
+7. Creating a release will start the publish workflow. You can track the progress of this workflow in the "Actions" page of the GitHub repo.
+8. The workflow job that publishes a package to pypi requires code owner approval. This job will automatically send code owners a notification email, then it will wait for them to log in and approve the deployment.
+9. After receiving code owner approval, the publish workflow will resume.
+10. Once the publish workflow has finished, you should see your release on pypi.
 
 # Developer Certificate of Origin (DCO)
 
@@ -57,5 +109,5 @@ See [GitHub's official documentation](https://help.github.com/articles/using-pul
 
 (taken from [developercertificate.org](https://developercertificate.org/))
 
-See [LICENSE](https://github.com/ni/<reponame>/blob/main/LICENSE)
-for details about how \<reponame\> is licensed.
+See [LICENSE](https://github.com/ni/pypi-nitlsconfig/blob/main/LICENSE)
+for details about how pypi-nitlsconfig is licensed.
