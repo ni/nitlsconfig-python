@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
-        python-version: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python-version: ["3.9", "3.10", 3.11, 3.12, 3.13, 3.14]
       # Fail-fast skews the pass/fail ratio and seems to make pytest produce
       # incomplete JUnit XML results.
       fail-fast: false
@@ -31,7 +31,7 @@ jobs:
           path: .venv
           key: nitlsconfig-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('poetry.lock') }}
       - name: Install nitlsconfig
-        run: poetry install -v
+        run: poetry install -v --all-extras
       - name: Run unit tests and code coverage
         run: poetry run pytest ./tests/unit -v --cov=nitlsconfig --junitxml=test_results/nitlsconfig-${{ matrix.os }}-py${{ matrix.python-version }}.xml
       - name: Upload test results
@@ -40,3 +40,38 @@ jobs:
           name: test_results_unit_${{ matrix.os }}_py${{ matrix.python-version }}
           path: ./test_results/*.xml
         if: always()
+
+  check_install_without_extras:
+    name: Check install without extras
+    # grpcio is an optional extra. Without this job, nothing stops a top-level
+    # "import grpc" from creeping into the config-reading code and silently
+    # making the extra mandatory again.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: ni/python-actions/setup-python@aa64e60612cb078b0c2ada666becbd70d4817d55 # 0.7.1
+        with:
+          python-version: "3.13"
+      - name: Install nitlsconfig without extras
+        run: pip install .
+      - name: Verify grpcio is absent
+        run: |
+          if pip show grpcio > /dev/null 2>&1; then
+            echo "grpcio was installed without the grpc extra"
+            exit 1
+          fi
+      - name: Verify the package imports and fails helpfully
+        run: |
+          python - <<'PY'
+          import nitlsconfig
+
+          assert nitlsconfig.ClientConfig is not None
+          try:
+              nitlsconfig.create_client_channel
+          except ImportError as exc:
+              assert "pip install nitlsconfig[grpc]" in str(exc), exc
+          else:
+              raise AssertionError("expected ImportError without the grpc extra")
+          PY
