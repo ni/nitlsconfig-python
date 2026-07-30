@@ -45,6 +45,10 @@ htmlhelp_basename = f"{project}doc"
 # tell autoapi to doc the public options
 autoapi_options = list(autoapi.extension._DEFAULT_OPTIONS)
 autoapi_options.remove("private-members")  # note: remove this to include "_" members in docs
+# The package root re-exports names from nitlsconfig.cli and nitlsconfig.grpc_channel.
+# Documenting those imports as well would define every name twice, which makes any
+# cross-reference to a bare name ambiguous and fails the -W build.
+autoapi_options.remove("imported-members")
 autoapi_dirs = [root_path / "src" / "nitlsconfig"]
 autoapi_type = "python"
 autodoc_typehints = "description"
