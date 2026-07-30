@@ -191,7 +191,7 @@ def test_skip_hostname_validation_matches_trusted_certificates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # grpc's Python API cannot skip only the hostname check, so this mode is
-    # deliberately treated as TrustedCertificates. nigrpctls does the same.
+    # deliberately treated as TrustedCertificates.
     def config(server_mode: ClientServerMode) -> FakeClientConfig:
         return FakeClientConfig(
             server_mode=server_mode,

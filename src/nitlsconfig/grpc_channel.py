@@ -18,10 +18,8 @@ Channel ownership stays with the caller, matching the NI Python driver APIs,
 which never close the channel themselves. ``grpc.Channel`` is already a context
 manager, so ``with create_grpc_client_channel(...) as channel:`` works as expected.
 
-This is the Python counterpart of the nigrpctls C++ transport's
-``GrpcTransportFactory::createClientChannel``, and deliberately mirrors its
-behavior. The name carries the ``grpc`` prefix because this package also
-re-exports the factory from its root, alongside future non-gRPC transports.
+The name carries the ``grpc`` prefix because this package also re-exports the
+factory from its root, alongside any potential future non-gRPC transports.
 
 A client ``server_mode`` of ``TrustAlways`` is not currently supported and raises
 :class:`TlsConfigurationError`.
@@ -29,14 +27,11 @@ A client ``server_mode`` of ``TrustAlways`` is not currently supported and raise
 A client ``server_mode`` of ``SkipHostnameValidation`` is treated exactly like
 ``TrustedCertificates``: the server certificate chain is verified *and* the
 hostname is checked. gRPC's Python API exposes no way to skip only the hostname
-check. Doing so requires a custom certificate verifier, which is available in
-C++ as ``grpc::experimental::TlsChannelCredentials`` with a
-``HostNameCertificateVerifier``/``NoOpCertificateVerifier`` but is not bound in
-grpcio's Python layer, whose TLS surface is limited to
-``grpc.ssl_channel_credentials``. The nigrpctls C++ transport ignores this mode
-for the same reason, so both implementations agree; only the Thrift transport
-honors it. Verifying when asked not to fails closed, so this is safe, but a
-caller who sets the mode gets no relaxation of the hostname check.
+check: doing so requires a custom certificate verifier, which grpcio does not
+bind in Python, where the TLS surface is limited to
+``grpc.ssl_channel_credentials``. Verifying when asked not to fails closed, so
+this is safe, but a caller who sets the mode gets no relaxation of the hostname
+check.
 
 When the server certificate's CN/SAN does not match the dialed host, pass
 ``grpc.ssl_target_name_override`` via ``options`` instead. That substitutes the
