@@ -68,7 +68,7 @@ def create_channel(
 ) -> RecordedChannel:
     """Create a channel using the supplied configuration instead of the real CLI."""
     monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
-    channel = grpc_channel.create_client_channel("localhost", 31763, **kwargs)
+    channel = grpc_channel.create_grpc_client_channel("localhost", 31763, **kwargs)
     assert isinstance(channel, RecordedChannel)
     return channel
 
@@ -102,7 +102,7 @@ def test_ipv6_addresses_are_bracketed(
     """
     monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: FakeClientConfig())
 
-    channel = grpc_channel.create_client_channel(server_address, 31763)
+    channel = grpc_channel.create_grpc_client_channel(server_address, 31763)
 
     assert isinstance(channel, RecordedChannel)
     assert channel.target == expected_target
@@ -263,7 +263,7 @@ def test_invalid_configuration_raises(
     monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
 
     with pytest.raises(grpc_channel.TlsConfigurationError):
-        grpc_channel.create_client_channel("localhost", 31763)
+        grpc_channel.create_grpc_client_channel("localhost", 31763)
 
 
 def test_service_name_is_forwarded(
@@ -278,8 +278,8 @@ def test_service_name_is_forwarded(
 
     monkeypatch.setattr(grpc_channel, "ClientConfig", record_client_config)
 
-    grpc_channel.create_client_channel("localhost", 31763)
-    grpc_channel.create_client_channel("localhost", 31763, service_name="other-service")
+    grpc_channel.create_grpc_client_channel("localhost", 31763)
+    grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="other-service")
 
     assert requested == [grpc_channel.DEFAULT_SERVICE_NAME, "other-service"]
 

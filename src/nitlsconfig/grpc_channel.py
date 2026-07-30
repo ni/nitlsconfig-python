@@ -7,16 +7,21 @@ configured, a plain insecure channel.
 The resulting channel is a normal ``grpc.Channel``. It can be handed directly to
 any NI gRPC Python API, for example::
 
-    from nitlsconfig.grpc_channel import create_client_channel
+    from nitlsconfig.grpc_channel import create_grpc_client_channel
 
-    channel = create_client_channel("localhost", 31763)
+    channel = create_grpc_client_channel("localhost", 31763)
     options = nidcpower.GrpcSessionOptions(channel, "")
     with nidcpower.Session("Dev1", grpc_options=options) as session:
         ...
 
 Channel ownership stays with the caller, matching the NI Python driver APIs,
 which never close the channel themselves. ``grpc.Channel`` is already a context
-manager, so ``with create_client_channel(...) as channel:`` works as expected.
+manager, so ``with create_grpc_client_channel(...) as channel:`` works as expected.
+
+This is the Python counterpart of the nigrpctls C++ transport's
+``GrpcTransportFactory::createClientChannel``, and deliberately mirrors its
+behavior. The name carries the ``grpc`` prefix because this package also
+re-exports the factory from its root, alongside future non-gRPC transports.
 
 A client ``server_mode`` of ``TrustAlways`` is not currently supported and raises
 :class:`TlsConfigurationError`.
@@ -59,7 +64,7 @@ __all__ = [
     "DEFAULT_SERVICE_NAME",
     "RetryPolicy",
     "TlsConfigurationError",
-    "create_client_channel",
+    "create_grpc_client_channel",
 ]
 
 # The nitlsconfig service name registered by the NI gRPC Device Server. It is
@@ -290,7 +295,7 @@ def _make_client_credentials(settings: _ClientTlsSettings) -> grpc.ChannelCreden
     )
 
 
-def create_client_channel(
+def create_grpc_client_channel(
     server_address: str,
     server_port: int,
     service_name: str = DEFAULT_SERVICE_NAME,

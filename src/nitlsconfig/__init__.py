@@ -37,7 +37,7 @@ if TYPE_CHECKING:
         DEFAULT_SERVICE_NAME,
         RetryPolicy,
         TlsConfigurationError,
-        create_client_channel,
+        create_grpc_client_channel,
     )
 
 __version__ = version("nitlsconfig")
@@ -48,7 +48,7 @@ _GRPC_EXPORTS = frozenset(
         "DEFAULT_SERVICE_NAME",
         "RetryPolicy",
         "TlsConfigurationError",
-        "create_client_channel",
+        "create_grpc_client_channel",
     }
 )
 
@@ -71,7 +71,7 @@ __all__ = [
     "DEFAULT_SERVICE_NAME",
     "RetryPolicy",
     "TlsConfigurationError",
-    "create_client_channel",
+    "create_grpc_client_channel",
 ]
 
 

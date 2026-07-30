@@ -3,7 +3,7 @@
 import json
 import pathlib
 import platform
-from typing import Mapping, TypedDict, cast
+from typing import cast, Mapping, TypedDict
 
 import grpc
 import pytest
@@ -178,7 +178,7 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
 
     Every other channel test substitutes a fake config, so this is the only one
     that exercises the seam: enum parsing, CertificateLocation.from_string and
-    the contents lookups all feed create_client_channel here. A mis-parsed
+    the contents lookups all feed create_grpc_client_channel here. A mis-parsed
     server_mode would silently produce an insecure channel and be invisible
     elsewhere in the suite.
 
@@ -193,7 +193,9 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(grpc, "ssl_channel_credentials", spy)
 
-    with grpc_channel.create_client_channel("localhost", 31763, service_name="ni-mqtt") as channel:
+    with grpc_channel.create_grpc_client_channel(
+        "localhost", 31763, service_name="ni-mqtt"
+    ) as channel:
         assert isinstance(channel, grpc.Channel)
 
     # SystemDefault trust anchors must arrive as None, not empty bytes.
@@ -205,4 +207,4 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
 def test_real_config_with_unknown_server_mode_is_rejected() -> None:
     """ni-test has no server_mode, which must be rejected rather than silently ignored."""
     with pytest.raises(grpc_channel.TlsConfigurationError):
-        grpc_channel.create_client_channel("localhost", 31763, service_name="ni-test")
+        grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="ni-test")

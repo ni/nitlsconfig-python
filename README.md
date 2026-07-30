@@ -22,14 +22,14 @@ The gRPC channel factory additionally needs grpcio, which is an optional extra:
 
 ## Creating a gRPC channel
 
-`create_client_channel` reads the local NI-TLS client configuration and returns a
+`create_grpc_client_channel` reads the local NI-TLS client configuration and returns a
 `grpc.Channel` secured accordingly. Pass it straight to any NI gRPC Python API:
 
 ```python
 import nidcpower
 import nitlsconfig
 
-with nitlsconfig.create_client_channel("localhost", 31763) as channel:
+with nitlsconfig.create_grpc_client_channel("localhost", 31763) as channel:
     options = nidcpower.GrpcSessionOptions(channel, "")
     with nidcpower.Session("Dev1", grpc_options=options) as session:
         ...
@@ -42,7 +42,7 @@ channel is owned by the caller - NI driver APIs never close it.
 Retries are opt-in:
 
 ```python
-channel = nitlsconfig.create_client_channel(
+channel = nitlsconfig.create_grpc_client_channel(
     "localhost", 31763, retry_policy=nitlsconfig.RetryPolicy()
 )
 ```

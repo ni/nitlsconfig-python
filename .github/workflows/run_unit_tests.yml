@@ -69,7 +69,7 @@ jobs:
 
           assert nitlsconfig.ClientConfig is not None
           try:
-              nitlsconfig.create_client_channel
+              nitlsconfig.create_grpc_client_channel
           except ImportError as exc:
               assert "pip install nitlsconfig[grpc]" in str(exc), exc
           else:
