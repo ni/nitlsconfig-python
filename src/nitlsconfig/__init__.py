@@ -12,6 +12,7 @@ same way without changing what a bare install requires.
 """
 
 from importlib.metadata import version
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
 from nitlsconfig.cli import (
@@ -43,14 +44,14 @@ if TYPE_CHECKING:
 __version__ = version("nitlsconfig")
 
 # Names re-exported from nitlsconfig.grpc_channel, which requires grpcio.
-_GRPC_EXPORTS = frozenset(
-    {
-        "DEFAULT_SERVICE_NAME",
-        "RetryPolicy",
-        "TlsConfigurationError",
-        "create_grpc_client_channel",
-    }
-)
+# A plain list literal, because pyright only tracks __all__ through a small set
+# of literal forms; anything computed makes it give up on the export list.
+_GRPC_EXPORTS = [
+    "DEFAULT_SERVICE_NAME",
+    "RetryPolicy",
+    "TlsConfigurationError",
+    "create_grpc_client_channel",
+]
 
 __all__ = [
     "__version__",
@@ -68,11 +69,18 @@ __all__ = [
     "InvalidOutputError",
     "TrustedCertificateData",
     "KnownServerData",
-    "DEFAULT_SERVICE_NAME",
-    "RetryPolicy",
-    "TlsConfigurationError",
-    "create_grpc_client_channel",
 ]
+
+# The gRPC names are public API, but only on an install that can supply them.
+# Listing them unconditionally would make `from nitlsconfig import *` raise
+# ImportError without the grpc extra, since star-import resolves every name in
+# __all__. find_spec only locates grpcio; it does not import it, so the lazy
+# __getattr__ below still decides when grpcio is actually loaded.
+if find_spec("grpc") is not None:
+    # pyright only tracks __all__ through inline literals, so it cannot follow
+    # this and warns that the export list may be incomplete. The TYPE_CHECKING
+    # block above already declares these names for static consumers.
+    __all__ += _GRPC_EXPORTS  # pyright: ignore[reportUnsupportedDunderAll]
 
 
 def __getattr__(name: str) -> Any:

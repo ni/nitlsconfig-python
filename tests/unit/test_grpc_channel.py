@@ -187,6 +187,24 @@ def test_one_way_tls_credentials(
     assert channel.credentials["certificate_chain"] is None
 
 
+def test_directory_trust_anchors_are_supported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # nitlsconfig resolves a Directory of anchors into one PEM bundle, so Directory
+    # is a working trust source and must not be rejected as an unsupported scheme.
+    config = FakeClientConfig(
+        server_mode=ClientServerMode.TrustedCertificates,
+        certificate_mode=ClientCertMode.Disabled,
+        trusted_certificates_location=CertificateLocation(LocationScheme.Directory, "trusted.d"),
+        trusted_certificates_contents="ROOT_A\nROOT_B",
+    )
+
+    channel = create_channel(monkeypatch, config)
+
+    assert channel.credentials is not None
+    assert channel.credentials["root_certificates"] == b"ROOT_A\nROOT_B"
+
+
 def test_skip_hostname_validation_matches_trusted_certificates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -254,6 +272,55 @@ def test_skip_hostname_validation_matches_trusted_certificates(
                 trusted_certificates_location=CertificateLocation(LocationScheme.File),
             ),
             id="missing_trust_anchors",
+        ),
+        pytest.param(
+            FakeClientConfig(
+                server_mode=ClientServerMode.TrustedCertificates,
+                certificate_mode=ClientCertMode.Disabled,
+                trusted_certificates_location=CertificateLocation(LocationScheme.Unknown),
+            ),
+            id="unknown_trust_scheme",
+        ),
+        # A File trust bundle that produced nothing must fail rather than fall back
+        # to the platform trust store, which would silently widen trust far beyond
+        # the configured anchors.
+        pytest.param(
+            FakeClientConfig(
+                server_mode=ClientServerMode.TrustedCertificates,
+                certificate_mode=ClientCertMode.Disabled,
+                trusted_certificates_location=FILE_TRUST,
+                trusted_certificates_contents="",
+            ),
+            id="empty_trusted_contents",
+        ),
+        # A configured client certificate whose material is empty must fail rather
+        # than silently downgrade the connection to one-way TLS. Opting out of mTLS
+        # is expressed by certificate_mode Disabled, not by empty contents.
+        pytest.param(
+            FakeClientConfig(
+                server_mode=ClientServerMode.TrustedCertificates,
+                certificate_mode=ClientCertMode.Managed,
+                certificate_chain_location=FILE_CERT,
+                certificate_chain_contents="",
+                certificate_key_location=FILE_KEY,
+                certificate_key_contents="KEY",
+                trusted_certificates_location=FILE_TRUST,
+                trusted_certificates_contents="ROOT",
+            ),
+            id="empty_certificate_chain_contents",
+        ),
+        pytest.param(
+            FakeClientConfig(
+                server_mode=ClientServerMode.TrustedCertificates,
+                certificate_mode=ClientCertMode.Managed,
+                certificate_chain_location=FILE_CERT,
+                certificate_chain_contents="CERT",
+                certificate_key_location=FILE_KEY,
+                certificate_key_contents="",
+                trusted_certificates_location=FILE_TRUST,
+                trusted_certificates_contents="ROOT",
+            ),
+            id="empty_certificate_key_contents",
         ),
     ],
 )

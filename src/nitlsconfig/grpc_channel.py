@@ -89,6 +89,15 @@ def _format_target(server_address: str, server_port: int) -> str:
 class TlsConfigurationError(NitlsconfigCliError):
     """Raised when the NI-TLS configuration was read successfully but is invalid."""
 
+    #: Shared remedy text appended to messages whose fix is to provision
+    #: certificates. Kept in one place so the guidance stays consistent with the
+    #: wording used elsewhere in the product.
+    _REMEDY = (
+        "Use NI Hardware Manager to verify that certificates are configured and "
+        "matching on both the host and remote target. Check that the remote target "
+        "has a compatible TLS enabled configuration with the host."
+    )
+
 
 @dataclass(frozen=True)
 class RetryPolicy:
@@ -206,6 +215,23 @@ def _require_file_scheme(
         )
 
 
+def _require_contents(contents: str, description: str, service_name: str) -> str:
+    """Validate that configured certificate material is actually present.
+
+    Empty contents mean the material could not be produced (missing, unreadable,
+    or not yet provisioned), never that the client opted out. Opting out is
+    expressed by the configuration itself: ``certificate_mode`` Disabled for the
+    client identity, and the SystemDefault scheme for trust anchors. Neither
+    reaches this check.
+    """
+    if not contents:
+        raise TlsConfigurationError(
+            f"TLS is configured for service {service_name!r} but the client "
+            f"{description} is missing on this system. {TlsConfigurationError._REMEDY}"
+        )
+    return contents
+
+
 def _load_client_tls_settings(config: ClientConfig) -> Optional[_ClientTlsSettings]:
     """Read and validate client TLS settings, or None when TLS is not in use.
 
@@ -238,23 +264,32 @@ def _load_client_tls_settings(config: ClientConfig) -> Optional[_ClientTlsSettin
     if present_client_cert:
         _require_file_scheme(config.certificate_chain_location, "certificate chain", service_name)
         _require_file_scheme(config.certificate_key_location, "certificate key", service_name)
-        certificate_chain_contents = config.certificate_chain_contents
-        private_key_contents = config.certificate_key_contents
+        certificate_chain_contents = _require_contents(
+            config.certificate_chain_contents, "certificate chain", service_name
+        )
+        private_key_contents = _require_contents(
+            config.certificate_key_contents, "certificate key", service_name
+        )
 
     # Trust anchors are always required: the client must verify the server.
+    # SystemDefault means "use the platform certificate store" and carries no
+    # contents. Every other usable scheme (File, Directory) is resolved by
+    # nitlsconfig into a single PEM bundle, so the scheme itself does not need
+    # to be special-cased here; only Unknown is rejected.
     trusted_location = config.trusted_certificates_location
-    trusted_available = trusted_location.scheme == LocationScheme.SystemDefault or bool(
-        trusted_location.path
-    )
-    if not trusted_available:
+    if trusted_location.scheme == LocationScheme.Unknown:
         raise TlsConfigurationError(
-            "TLS is enabled but the client trusted certificates path is missing for "
-            f"service {service_name!r}."
+            f"TLS is configured for service {service_name!r} but the client trusted "
+            f"certificates location is missing or unrecognized. {TlsConfigurationError._REMEDY}"
         )
 
     trusted_contents = ""
     if trusted_location.scheme != LocationScheme.SystemDefault:
-        trusted_contents = config.trusted_certificates_contents
+        # Any scheme other than SystemDefault names specific anchors, so they
+        # must actually be present.
+        trusted_contents = _require_contents(
+            config.trusted_certificates_contents, "trusted certificate bundle", service_name
+        )
 
     return _ClientTlsSettings(
         present_client_cert=present_client_cert,

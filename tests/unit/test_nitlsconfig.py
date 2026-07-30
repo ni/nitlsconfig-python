@@ -3,7 +3,7 @@
 import json
 import pathlib
 import platform
-from typing import cast, Mapping, TypedDict
+from typing import cast, Mapping, Optional, TypedDict
 
 import grpc
 import pytest
@@ -187,7 +187,7 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
     captured: dict[str, object] = {}
     real_ssl_channel_credentials = grpc.ssl_channel_credentials
 
-    def spy(**kwargs: object) -> object:
+    def spy(**kwargs: Optional[bytes]) -> grpc.ChannelCredentials:
         captured.update(kwargs)
         return real_ssl_channel_credentials(**kwargs)
 
