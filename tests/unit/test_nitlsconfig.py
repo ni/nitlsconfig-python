@@ -3,12 +3,14 @@
 import json
 import pathlib
 import platform
-from typing import Mapping, TypedDict
+from typing import cast, Mapping, Optional, TypedDict
 
+import grpc
 import pytest
 
 import nitlsconfig
 import nitlsconfig.cli as nitlsconfig_cli
+from nitlsconfig import grpc_channel
 
 TEST_DIR = pathlib.Path(__file__).resolve().parents[0]
 CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
@@ -107,10 +109,13 @@ def test_client_info() -> None:
 
     assert client_info.service_name == "ni-test"
     assert client_info.certificate_mode == nitlsconfig.ClientCertMode.Unknown
+    # server_mode is the master TLS switch, so its parsing must be pinned.
+    assert client_info.server_mode == nitlsconfig.ClientServerMode.Unknown
     client_info = nitlsconfig.ClientConfig("ni-mqtt")
 
     assert client_info.service_name == "ni-mqtt"
     assert client_info.certificate_mode == nitlsconfig.ClientCertMode.Managed
+    assert client_info.server_mode == nitlsconfig.ClientServerMode.TrustedCertificates
     assert client_info.certificate_chain_location.scheme == nitlsconfig.LocationScheme.File
     assert "cert.pem" in client_info.certificate_chain_location.path
     assert "BEGIN CERTIFICATE" in client_info.certificate_chain_contents
@@ -166,3 +171,40 @@ def test_server_info() -> None:
         "beta-trusted-certificate"
         in server_info.trusted_certificates[1].trusted_certificate_contents
     )
+
+
+def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real ClientConfig, parsed from CLI output, produces the expected credentials.
+
+    Every other channel test substitutes a fake config, so this is the only one
+    that exercises the seam: enum parsing, CertificateLocation.from_string and
+    the contents lookups all feed create_grpc_client_channel here. A mis-parsed
+    server_mode would silently produce an insecure channel and be invisible
+    elsewhere in the suite.
+
+    ni-mqtt is configured for mutual TLS with SystemDefault trust anchors.
+    """
+    captured: dict[str, object] = {}
+    real_ssl_channel_credentials = grpc.ssl_channel_credentials
+
+    def spy(**kwargs: Optional[bytes]) -> grpc.ChannelCredentials:
+        captured.update(kwargs)
+        return real_ssl_channel_credentials(**kwargs)
+
+    monkeypatch.setattr(grpc, "ssl_channel_credentials", spy)
+
+    with grpc_channel.create_grpc_client_channel(
+        "localhost", 31763, service_name="ni-mqtt"
+    ) as channel:
+        assert isinstance(channel, grpc.Channel)
+
+    # SystemDefault trust anchors must arrive as None, not empty bytes.
+    assert captured["root_certificates"] is None
+    assert b"BEGIN CERTIFICATE" in cast(bytes, captured["certificate_chain"])
+    assert b"PRIVATE KEY" in cast(bytes, captured["private_key"])
+
+
+def test_real_config_with_unknown_server_mode_is_rejected() -> None:
+    """ni-test has no server_mode, which must be rejected rather than silently ignored."""
+    with pytest.raises(grpc_channel.TlsConfigurationError):
+        grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="ni-test")

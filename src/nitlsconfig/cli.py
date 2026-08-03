@@ -515,6 +515,25 @@ class ClientConfig(_BaseConfig):
         )
 
     @property
+    def server_mode(self) -> ClientServerMode:
+        "Parse server_mode string into ClientServerMode enum, defaulting to Unknown."
+        return _parse_enum(
+            self._value("server_mode"),
+            ClientServerMode,
+            ClientServerMode.Unknown,
+        )
+
+    @property
+    def certificate_key_location(self) -> CertificateLocation:
+        "Return the parsed certificate_key_location from the service configuration."
+        return self._location("certificate_key_location")
+
+    @property
+    def certificate_key_contents(self) -> str:
+        "Return the raw certificate_key_contents string from the service configuration."
+        return self._value("certificate_key_contents")
+
+    @property
     def known_servers(self) -> list[KnownServerData]:
         "Return the raw known_servers list from the service configuration."
         return self._data.known_servers

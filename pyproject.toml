@@ -2,13 +2,13 @@
 name = "nitlsconfig"
 version = "1.0.0.dev0"
 license = "MIT"
-description = "Python API for reading nitlsconfig configurations"
+description = "Python API for reading nitlsconfig configurations and creating gRPC client channels from them"
 authors = [{name = "NI", email = "opensource@ni.com"}]
 maintainers = [
   {name = "Philip Thong", email = "philip.thong@emerson.com"},
 ]
 readme = "README.md"
-keywords = ["nitlsconfig", "tls", "configuration"]
+keywords = ["nitlsconfig", "tls", "mtls", "grpc", "configuration"]
 classifiers = [
 	"Development Status :: 4 - Beta",
 	"Intended Audience :: Developers",
@@ -21,9 +21,15 @@ classifiers = [
 	"Programming Language :: Python :: 3.11",
 	"Programming Language :: Python :: 3.12",
 	"Programming Language :: Python :: 3.13",
+	"Programming Language :: Python :: 3.14",
 ]
 requires-python = ">=3.9"
 dynamic = ["dependencies"]
+
+# Reading NI-TLS configuration is pure Python. Only nitlsconfig.grpc_channel
+# needs grpcio, so the binary wheel is opt-in.
+[project.optional-dependencies]
+grpc = ["grpcio>=1.49.0,<2.0"]
 
 [project.urls]
 repository = "https://github.com/ni/pypi-nitlsconfig"
@@ -51,6 +57,7 @@ pytest = ">=7.2"
 pytest-cov = ">=4.0"
 pytest-mock = ">=3.0"
 pytest-env = ">=1.0,<2.0"
+cryptography = ">=41.0"
 
 [tool.poetry.group.docs]
 optional = true
@@ -84,6 +91,11 @@ line-length = 100
 files = "src/nitlsconfig/,tests/"
 namespace_packages = true
 strict = true
+
+[[tool.mypy.overrides]]
+# grpcio does not ship a py.typed marker.
+module = "grpc.*"
+ignore_missing_imports = true
 
 [tool.bandit]
 skips = [

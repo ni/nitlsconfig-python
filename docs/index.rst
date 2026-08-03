@@ -1,5 +1,5 @@
-NI Panel Python API
-===================
+nitlsconfig Python API
+======================
 .. toctree::
    :maxdepth: 3
 

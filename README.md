@@ -1,6 +1,10 @@
-# pypi-nitlsconfig
+# nitlsconfig
 
-Python API that reads nitlsconfig configurations through `nitlsconfig` command line.
+Python API that reads nitlsconfig configurations through the `nitlsconfig` command line,
+and builds gRPC client channels from them.
+
+Installed and imported as `nitlsconfig`; developed at
+[ni/pypi-nitlsconfig](https://github.com/ni/pypi-nitlsconfig).
 
 ## Runtime dependencies
 
@@ -8,9 +12,46 @@ Python API that reads nitlsconfig configurations through `nitlsconfig` command l
 
 ## Install
 
-- pip install nitlsconfig
+Reading NI-TLS configuration is pure Python and has no third-party dependencies:
 
-## Usage
+- `pip install nitlsconfig`
+
+The gRPC channel factory additionally needs grpcio, which is an optional extra:
+
+- `pip install nitlsconfig[grpc]`
+
+## Creating a gRPC channel
+
+`create_grpc_client_channel` reads the local NI-TLS client configuration and returns a
+`grpc.Channel` secured accordingly. Pass it straight to any NI gRPC Python API:
+
+```python
+import nidcpower
+import nitlsconfig
+
+with nitlsconfig.create_grpc_client_channel("localhost", 31763) as channel:
+    options = nidcpower.GrpcSessionOptions(channel, "")
+    with nidcpower.Session("Dev1", grpc_options=options) as session:
+        ...
+```
+
+The channel is mutually authenticated, one-way TLS, or insecure depending on how
+the machine is configured; no code change is needed to move between them. The
+channel is owned by the caller - NI driver APIs never close it.
+
+Retries are opt-in:
+
+```python
+channel = nitlsconfig.create_grpc_client_channel(
+    "localhost", 31763, retry_policy=nitlsconfig.RetryPolicy()
+)
+```
+
+`TlsConfigurationError` is raised when TLS is enabled but the configuration is
+unusable. Accessing any of these names without the `grpc` extra installed raises
+`ImportError` telling you which extra to install.
+
+## Reading configurations
 ```python
 import nitlsconfig
 
