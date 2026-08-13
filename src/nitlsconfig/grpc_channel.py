@@ -341,8 +341,9 @@ def create_grpc_client_channel(
     default until the machine is configured.
 
     Args:
-        server_address: Host name or address of the NI gRPC Device Server. IPv6
-            literals may be passed with or without brackets.
+        server_address: Host name or address of the NI gRPC Device Server. Also used
+            to resolve NI-TLS settings specific to this target. IPv6 literals may be
+            passed with or without brackets.
         server_port: Port of the NI gRPC Device Server.
         service_name: nitlsconfig service name to read configuration from.
         options: gRPC channel arguments, as ``(key, value)`` pairs. Use this to

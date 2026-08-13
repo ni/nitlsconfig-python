@@ -25,7 +25,7 @@ The gRPC channel factory additionally needs grpcio, which is an optional extra:
 `create_grpc_client_channel` reads the local NI-TLS client configuration and returns a
 `grpc.Channel` secured accordingly. The `server_address` hostname or address is also
 used to resolve target-specific NI-TLS settings. Pass the channel straight to any NI
-gRPC Python API:nel` secured accordingly. Pass it straight to any NI gRPC Python API:
+gRPC Python API:
 
 ```python
 import nidcpower
