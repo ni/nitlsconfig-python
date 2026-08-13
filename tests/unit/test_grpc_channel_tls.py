@@ -126,7 +126,11 @@ def test_mutual_tls_handshake_succeeds(
 ) -> None:
     """A real RPC completes over mutual TLS using credentials we built."""
     config = _mutual_tls_config(certificate_authority, client_identity)
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: config,
+    )
 
     with grpc_channel.create_grpc_client_channel("localhost", trusted_server) as channel:
         say = channel.unary_unary(
@@ -147,7 +151,11 @@ def test_server_from_untrusted_ca_is_rejected(
     other test in the suite.
     """
     config = _mutual_tls_config(certificate_authority, client_identity)
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: config,
+    )
 
     with grpc_channel.create_grpc_client_channel("localhost", untrusted_server) as channel:
         say = channel.unary_unary(

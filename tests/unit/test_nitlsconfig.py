@@ -76,6 +76,22 @@ def mock_nitlsconfig_command(
     def fake_run_nitlsconfig_command(command_args: tuple[str, ...]) -> str:
         if command_args in command_responses:
             return command_responses[command_args]
+        if len(command_args) == 6 and command_args[1] == "read":
+            scope, _, service_name, _, keyword, _ = command_args
+            fixture_json = (
+                nitlsconfig_json_fixtures["client_json"]
+                if scope == "client"
+                else nitlsconfig_json_fixtures["server_json"]
+            )
+            payload = json.loads(fixture_json)
+            services = payload[scope]
+            service = next(
+                (item for item in services if item["service_name"] == service_name),
+                None,
+            )
+            if service is None:
+                raise AssertionError(f"Unknown fixture service: {service_name!r}")
+            return str(service.get(keyword, ""))
         raise AssertionError(f"Unexpected nitlsconfig command args: {command_args!r}")
 
     monkeypatch.setattr(
@@ -120,6 +136,51 @@ def test_client_info() -> None:
     assert "cert.pem" in client_info.certificate_chain_location.path
     assert "BEGIN CERTIFICATE" in client_info.certificate_chain_contents
     assert "END CERTIFICATE" in client_info.certificate_chain_contents
+
+
+def test_client_info_for_server_reads_target_specific_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Target-specific client settings are read using the server address."""
+    server_address = "10.198.114.155"
+    values = {
+        "certificate_mode": "Disabled",
+        "certificate_chain_location": "",
+        "certificate_chain_contents": "CERT\n\nCHAIN",
+        "certificate_key_location": "",
+        "certificate_key_contents": "KEY\n\nCONTENTS",
+        "server_mode": "TrustedCertificates",
+        "trusted_certificates_location": "File://target-trust.pem",
+        "trusted_certificates_contents": "TARGET ROOT",
+    }
+    requested: list[tuple[str, ...]] = []
+
+    def fake_run_nitlsconfig_command(command_args: tuple[str, ...]) -> str:
+        requested.append(command_args)
+        keyword = command_args[4]
+        if keyword not in values:
+            raise AssertionError(f"Unexpected nitlsconfig keyword: {keyword!r}")
+        return values[keyword]
+
+    monkeypatch.setattr(
+        nitlsconfig_cli,
+        "run_nitlsconfig_command",
+        fake_run_nitlsconfig_command,
+    )
+
+    client_info = nitlsconfig.ClientConfig("ni-grpc-device", server_address)
+
+    assert client_info.server_mode == nitlsconfig.ClientServerMode.TrustedCertificates
+    assert client_info.certificate_chain_contents == "CERT\nCHAIN"
+    assert client_info.certificate_key_contents == "KEY\nCONTENTS"
+    assert client_info.trusted_certificates_location == nitlsconfig.CertificateLocation(
+        nitlsconfig.LocationScheme.File, "target-trust.pem"
+    )
+    assert client_info.trusted_certificates_contents == "TARGET ROOT"
+    assert client_info.known_servers == []
+    assert {command[4] for command in requested} == set(values)
+    assert all(command[:4] == ("client", "read", "ni-grpc-device", "conf") for command in requested)
+    assert all(command[-1] == server_address for command in requested)
 
 
 def test_server_info() -> None:

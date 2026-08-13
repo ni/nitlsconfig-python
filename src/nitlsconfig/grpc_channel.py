@@ -366,7 +366,7 @@ def create_grpc_client_channel(
     target = _format_target(server_address, server_port)
     channel_options = _apply_retry_policy(options, retry_policy)
 
-    settings = _load_client_tls_settings(ClientConfig(service_name))
+    settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
     if settings is None:
         return grpc.insecure_channel(target, options=channel_options)
 

@@ -71,7 +71,11 @@ def test_returns_a_usable_grpc_channel(
     monkeypatch: pytest.MonkeyPatch, config: FakeClientConfig
 ) -> None:
     """Every configuration produces a real channel with the API drivers rely on."""
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: config,
+    )
 
     with grpc_channel.create_grpc_client_channel("localhost", 31763) as channel:
         # nimi-python and nidaqmx-python pass this straight to GrpcSessionOptions,
@@ -98,7 +102,11 @@ def test_channel_options_are_accepted_by_grpc(
     fails to - once RPCs flow. The shape of the document is asserted separately
     in test_grpc_channel.py.
     """
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: MUTUAL_TLS)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: MUTUAL_TLS,
+    )
     capfd.readouterr()
 
     with grpc_channel.create_grpc_client_channel(

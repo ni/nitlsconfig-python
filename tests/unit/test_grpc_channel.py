@@ -67,7 +67,11 @@ def create_channel(
     monkeypatch: pytest.MonkeyPatch, config: FakeClientConfig, **kwargs: Any
 ) -> RecordedChannel:
     """Create a channel using the supplied configuration instead of the real CLI."""
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: config,
+    )
     channel = grpc_channel.create_grpc_client_channel("localhost", 31763, **kwargs)
     assert isinstance(channel, RecordedChannel)
     return channel
@@ -100,7 +104,11 @@ def test_ipv6_addresses_are_bracketed(
     bare form times out. The failure surfaces at the first RPC rather than at
     channel creation, so it is invisible without this assertion.
     """
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: FakeClientConfig())
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: FakeClientConfig(),
+    )
 
     channel = grpc_channel.create_grpc_client_channel(server_address, 31763)
 
@@ -327,20 +335,24 @@ def test_skip_hostname_validation_matches_trusted_certificates(
 def test_invalid_configuration_raises(
     monkeypatch: pytest.MonkeyPatch, config: FakeClientConfig
 ) -> None:
-    monkeypatch.setattr(grpc_channel, "ClientConfig", lambda service_name: config)
+    monkeypatch.setattr(
+        grpc_channel,
+        "ClientConfig",
+        lambda service_name, server_address: config,
+    )
 
     with pytest.raises(grpc_channel.TlsConfigurationError):
         grpc_channel.create_grpc_client_channel("localhost", 31763)
 
 
-def test_service_name_is_forwarded(
+def test_service_name_and_address_are_forwarded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The helper discards service_name, so plumbing needs its own check.
     requested = []
 
-    def record_client_config(service_name: str) -> FakeClientConfig:
-        requested.append(service_name)
+    def record_client_config(service_name: str, server_address: str) -> FakeClientConfig:
+        requested.append((service_name, server_address))
         return FakeClientConfig()
 
     monkeypatch.setattr(grpc_channel, "ClientConfig", record_client_config)
@@ -348,7 +360,10 @@ def test_service_name_is_forwarded(
     grpc_channel.create_grpc_client_channel("localhost", 31763)
     grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="other-service")
 
-    assert requested == [grpc_channel.DEFAULT_SERVICE_NAME, "other-service"]
+    assert requested == [
+        (grpc_channel.DEFAULT_SERVICE_NAME, "localhost"),
+        ("other-service", "localhost"),
+    ]
 
 
 def test_no_retry_policy_omits_service_config(

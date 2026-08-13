@@ -85,6 +85,17 @@ SERVER_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "trusted_certificate_contents",
 )
 
+CLIENT_READ_KEYWORDS: Tuple[str, ...] = (
+    "certificate_mode",
+    "certificate_chain_location",
+    "certificate_chain_contents",
+    "certificate_key_location",
+    "certificate_key_contents",
+    "server_mode",
+    "trusted_certificates_location",
+    "trusted_certificates_contents",
+)
+
 
 class NitlsconfigCliError(RuntimeError):
     """Base error for nitlsconfig command invocation failures."""
@@ -274,6 +285,18 @@ def build_batch_read_command(role: str) -> Tuple[str, ...]:
     return SERVER_BATCH_READ_COMMAND_TEMPLATE
 
 
+def build_read_command(
+    role: str, service_name: str, keyword: str, server_address: str
+) -> Tuple[str, ...]:
+    """Build argv for a target-specific configuration read."""
+    return (role, "read", service_name, "conf", keyword, server_address)
+
+
+def _normalize_contents(value: str) -> str:
+    """Remove blank lines inserted into PEM contents by target-specific reads."""
+    return "\n".join(line for line in value.splitlines() if line.strip())
+
+
 def run_nitlsconfig_command(
     command_args: Tuple[str, ...],
 ) -> str:
@@ -387,6 +410,19 @@ def _read_services(scope: str) -> list[ServiceData]:
         else:
             raise InvalidOutputError("nitlsconfig service entries must be objects")
     return normalized
+
+
+def _read_client_service_for_server(service_name: str, server_address: str) -> ServiceData:
+    """Read a service configuration resolved for a specific server address."""
+    raw: dict[str, Any] = {"service_name": service_name}
+    for keyword in CLIENT_READ_KEYWORDS:
+        value = run_nitlsconfig_command(
+            command_args=build_read_command("client", service_name, keyword, server_address)
+        ).strip()
+        if keyword.endswith("_contents"):
+            value = _normalize_contents(value)
+        raw[keyword] = value
+    return ServiceData.from_json_obj(raw)
 
 
 class _BaseConfig:
@@ -504,6 +540,20 @@ class ClientConfig(_BaseConfig):
     """Read-only view for client-side TLS configuration."""
 
     _scope = "client"
+
+    def __init__(self, service_name: str, server_address: Optional[str] = None) -> None:
+        """Read client configuration, optionally resolved for a server address.
+
+        When ``server_address`` is provided, values are read for that target and
+        ``known_servers`` is not populated because the native CLI does not expose
+        that batch-only field through individual reads.
+        """
+        self.service_name = service_name
+        self.server_address = server_address
+        if server_address is None:
+            self._data = self._find_service_data(service_name)
+        else:
+            self._data = _read_client_service_for_server(service_name, server_address)
 
     @property
     def certificate_mode(self) -> ClientCertMode:
