@@ -138,49 +138,51 @@ def test_client_info() -> None:
     assert "END CERTIFICATE" in client_info.certificate_chain_contents
 
 
-def test_client_info_for_server_reads_target_specific_values(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Target-specific client settings are read using the server address."""
-    server_address = "10.198.114.155"
-    values = {
-        "certificate_mode": "Disabled",
-        "certificate_chain_location": "",
-        "certificate_chain_contents": "CERT\n\nCHAIN",
-        "certificate_key_location": "",
-        "certificate_key_contents": "KEY\n\nCONTENTS",
-        "server_mode": "TrustedCertificates",
-        "trusted_certificates_location": "File://target-trust.pem",
-        "trusted_certificates_contents": "TARGET ROOT",
-    }
-    requested: list[tuple[str, ...]] = []
+def test_known_server_info() -> None:
+    """Known server entries should expose typed fields, not only raw JSON."""
+    client_info = nitlsconfig.ClientConfig("ni-mqtt")
 
-    def fake_run_nitlsconfig_command(command_args: tuple[str, ...]) -> str:
-        requested.append(command_args)
-        keyword = command_args[4]
-        if keyword not in values:
-            raise AssertionError(f"Unexpected nitlsconfig keyword: {keyword!r}")
-        return values[keyword]
+    assert len(client_info.known_servers) == 1
+    known_server = client_info.known_servers[0]
 
-    monkeypatch.setattr(
-        nitlsconfig_cli,
-        "run_nitlsconfig_command",
-        fake_run_nitlsconfig_command,
-    )
+    assert known_server.raw["display_name_en"] == "NI MQTT TLS Client"
+    assert known_server.display_name == "NI MQTT TLS Client"
+    assert known_server.certificate_mode == "Disabled"
+    assert known_server.certificate_chain_location.scheme == nitlsconfig.LocationScheme.File
+    assert "cert.pem" in known_server.certificate_chain_location.path
+    assert "BEGIN CERTIFICATE" in known_server.certificate_chain_contents
+    assert "END CERTIFICATE" in known_server.certificate_chain_contents
+    assert known_server.certificate_key_location.scheme == nitlsconfig.LocationScheme.File
+    assert "key.pem" in known_server.certificate_key_location.path
+    assert "BEGIN RSA PRIVATE KEY" in known_server.certificate_key_contents
+    assert known_server.server_mode == "TrustedCertificates"
+    assert known_server.server_name == "example-host1"
+    assert known_server.trusted_certificates_location.scheme == nitlsconfig.LocationScheme.File
+    assert "example-host1.pem" in known_server.trusted_certificates_location.path
+    assert "BEGIN CERTIFICATE" in known_server.trusted_certificates_contents
 
-    client_info = nitlsconfig.ClientConfig("ni-grpc-device", server_address)
 
+def test_client_info_for_known_server_uses_target_specific_values() -> None:
+    """Known-server settings override the generic client configuration."""
+    client_info = nitlsconfig.ClientConfig("ni-mqtt", "example-host1")
+
+    assert client_info.certificate_mode == nitlsconfig.ClientCertMode.Disabled
     assert client_info.server_mode == nitlsconfig.ClientServerMode.TrustedCertificates
-    assert client_info.certificate_chain_contents == "CERT\nCHAIN"
-    assert client_info.certificate_key_contents == "KEY\nCONTENTS"
     assert client_info.trusted_certificates_location == nitlsconfig.CertificateLocation(
-        nitlsconfig.LocationScheme.File, "target-trust.pem"
+        nitlsconfig.LocationScheme.File,
+        "C:/ProgramData/National Instruments/nitlsconfig/client.d/ni-mqtt/servers/example-host1.pem",
     )
-    assert client_info.trusted_certificates_contents == "TARGET ROOT"
-    assert client_info.known_servers == []
-    assert {command[4] for command in requested} == set(values)
-    assert all(command[:4] == ("client", "read", "ni-grpc-device", "conf") for command in requested)
-    assert all(command[-1] == server_address for command in requested)
+    assert "BEGIN CERTIFICATE" in client_info.trusted_certificates_contents
+
+
+def test_client_info_for_unknown_server_uses_generic_values() -> None:
+    """An unknown server address leaves the generic client configuration in effect."""
+    client_info = nitlsconfig.ClientConfig("ni-mqtt", "unknown-server")
+
+    assert client_info.certificate_mode == nitlsconfig.ClientCertMode.Managed
+    assert client_info.trusted_certificates_location.scheme == (
+        nitlsconfig.LocationScheme.SystemDefault
+    )
 
 
 def test_server_info() -> None:

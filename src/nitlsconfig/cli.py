@@ -85,17 +85,6 @@ SERVER_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "trusted_certificate_contents",
 )
 
-CLIENT_READ_KEYWORDS: Tuple[str, ...] = (
-    "certificate_mode",
-    "certificate_chain_location",
-    "certificate_chain_contents",
-    "certificate_key_location",
-    "certificate_key_contents",
-    "server_mode",
-    "trusted_certificates_location",
-    "trusted_certificates_contents",
-)
-
 
 class NitlsconfigCliError(RuntimeError):
     """Base error for nitlsconfig command invocation failures."""
@@ -208,6 +197,39 @@ class KnownServerData:
     """Typed wrapper for known server objects from CLI JSON."""
 
     raw: dict[str, Any]
+    display_name: str = field()
+    certificate_mode: str = field()
+    certificate_chain_location: CertificateLocation = field()
+    certificate_chain_contents: str = field()
+    certificate_key_location: CertificateLocation = field()
+    certificate_key_contents: str = field()
+    server_mode: str = field()
+    server_name: str = field()
+    trusted_certificates_location: CertificateLocation = field()
+    trusted_certificates_contents: str = field()
+
+    @classmethod
+    def from_json_obj(cls, obj: dict[str, Any]) -> "KnownServerData":
+        "Parse a known server object from CLI JSON into KnownServerData."
+        return cls(
+            raw=obj,
+            display_name=obj.get("display_name_en", ""),
+            certificate_mode=obj.get("certificate_mode", ""),
+            certificate_chain_location=CertificateLocation.from_string(
+                obj.get("certificate_chain_location", "")
+            ),
+            certificate_chain_contents=obj.get("certificate_chain_contents", ""),
+            certificate_key_location=CertificateLocation.from_string(
+                obj.get("certificate_key_location", "")
+            ),
+            certificate_key_contents=obj.get("certificate_key_contents", ""),
+            server_mode=obj.get("server_mode", ""),
+            server_name=obj.get("server_name", ""),
+            trusted_certificates_location=CertificateLocation.from_string(
+                obj.get("trusted_certificates_location", "")
+            ),
+            trusted_certificates_contents=obj.get("trusted_certificates_contents", ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -248,7 +270,7 @@ class ServiceData:
         if isinstance(known_servers_raw, list):
             for item in known_servers_raw:
                 if isinstance(item, dict):
-                    known_servers.append(KnownServerData(raw=item))
+                    known_servers.append(KnownServerData.from_json_obj(item))
 
         trusted_certificates_raw = obj.get("trusted_certificates", [])
         trusted_certificates: list[TrustedCertificateData] = []
@@ -283,18 +305,6 @@ def build_batch_read_command(role: str) -> Tuple[str, ...]:
     if role == "client":
         return CLIENT_BATCH_READ_COMMAND_TEMPLATE
     return SERVER_BATCH_READ_COMMAND_TEMPLATE
-
-
-def build_read_command(
-    role: str, service_name: str, keyword: str, server_address: str
-) -> Tuple[str, ...]:
-    """Build argv for a target-specific configuration read."""
-    return (role, "read", service_name, "conf", keyword, server_address)
-
-
-def _normalize_contents(value: str) -> str:
-    """Remove blank lines inserted into PEM contents by target-specific reads."""
-    return "\n".join(line for line in value.splitlines() if line.strip())
 
 
 def run_nitlsconfig_command(
@@ -410,19 +420,6 @@ def _read_services(scope: str) -> list[ServiceData]:
         else:
             raise InvalidOutputError("nitlsconfig service entries must be objects")
     return normalized
-
-
-def _read_client_service_for_server(service_name: str, server_address: str) -> ServiceData:
-    """Read a service configuration resolved for a specific server address."""
-    raw: dict[str, Any] = {"service_name": service_name}
-    for keyword in CLIENT_READ_KEYWORDS:
-        value = run_nitlsconfig_command(
-            command_args=build_read_command("client", service_name, keyword, server_address)
-        ).strip()
-        if keyword.endswith("_contents"):
-            value = _normalize_contents(value)
-        raw[keyword] = value
-    return ServiceData.from_json_obj(raw)
 
 
 class _BaseConfig:
@@ -544,16 +541,22 @@ class ClientConfig(_BaseConfig):
     def __init__(self, service_name: str, server_address: Optional[str] = None) -> None:
         """Read client configuration, optionally resolved for a server address.
 
-        When ``server_address`` is provided, values are read for that target and
-        ``known_servers`` is not populated because the native CLI does not expose
-        that batch-only field through individual reads.
+        When ``server_address`` matches a known server, its configuration is used.
+        Otherwise, the generic service configuration remains in effect.
         """
         self.service_name = service_name
         self.server_address = server_address
-        if server_address is None:
-            self._data = self._find_service_data(service_name)
-        else:
-            self._data = _read_client_service_for_server(service_name, server_address)
+        self._data = self._find_service_data(service_name)
+        if server_address is not None:
+            known_server = next(
+                (item for item in self._data.known_servers if item.server_name == server_address),
+                None,
+            )
+            if known_server is not None:
+                self._data = ServiceData(
+                    raw=known_server.raw,
+                    known_servers=self._data.known_servers,
+                )
 
     @property
     def certificate_mode(self) -> ClientCertMode:
@@ -585,7 +588,7 @@ class ClientConfig(_BaseConfig):
 
     @property
     def known_servers(self) -> list[KnownServerData]:
-        "Return the raw known_servers list from the service configuration."
+        "Return the typed known-server configurations from the service configuration."
         return self._data.known_servers
 
     @property
