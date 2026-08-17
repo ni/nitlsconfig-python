@@ -147,7 +147,7 @@ def test_known_server_info() -> None:
 
     assert known_server.raw["display_name_en"] == "NI MQTT TLS Client"
     assert known_server.display_name == "NI MQTT TLS Client"
-    assert known_server.certificate_mode == "Disabled"
+    assert known_server.certificate_mode == nitlsconfig.ClientCertMode.Disabled
     assert known_server.certificate_chain_location.scheme == nitlsconfig.LocationScheme.File
     assert "cert.pem" in known_server.certificate_chain_location.path
     assert "BEGIN CERTIFICATE" in known_server.certificate_chain_contents
@@ -155,7 +155,7 @@ def test_known_server_info() -> None:
     assert known_server.certificate_key_location.scheme == nitlsconfig.LocationScheme.File
     assert "key.pem" in known_server.certificate_key_location.path
     assert "BEGIN RSA PRIVATE KEY" in known_server.certificate_key_contents
-    assert known_server.server_mode == "TrustedCertificates"
+    assert known_server.server_mode == nitlsconfig.ClientServerMode.TrustedCertificates
     assert known_server.server_name == "example-host1"
     assert known_server.trusted_certificates_location.scheme == nitlsconfig.LocationScheme.File
     assert "example-host1.pem" in known_server.trusted_certificates_location.path
@@ -173,6 +173,7 @@ def test_client_info_for_known_server_uses_target_specific_values() -> None:
         "C:/ProgramData/National Instruments/nitlsconfig/client.d/ni-mqtt/servers/example-host1.pem",
     )
     assert "BEGIN CERTIFICATE" in client_info.trusted_certificates_contents
+    assert len(client_info.known_servers) == 1
 
 
 def test_client_info_for_unknown_server_uses_generic_values() -> None:

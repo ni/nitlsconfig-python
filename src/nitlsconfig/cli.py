@@ -198,12 +198,12 @@ class KnownServerData:
 
     raw: dict[str, Any]
     display_name: str = field()
-    certificate_mode: str = field()
+    certificate_mode: ClientCertMode = field()
     certificate_chain_location: CertificateLocation = field()
     certificate_chain_contents: str = field()
     certificate_key_location: CertificateLocation = field()
     certificate_key_contents: str = field()
-    server_mode: str = field()
+    server_mode: ClientServerMode = field()
     server_name: str = field()
     trusted_certificates_location: CertificateLocation = field()
     trusted_certificates_contents: str = field()
@@ -214,7 +214,11 @@ class KnownServerData:
         return cls(
             raw=obj,
             display_name=obj.get("display_name_en", ""),
-            certificate_mode=obj.get("certificate_mode", ""),
+            certificate_mode=_parse_enum(
+                obj.get("certificate_mode", ""),
+                ClientCertMode,
+                ClientCertMode.Unknown,
+            ),
             certificate_chain_location=CertificateLocation.from_string(
                 obj.get("certificate_chain_location", "")
             ),
@@ -223,7 +227,11 @@ class KnownServerData:
                 obj.get("certificate_key_location", "")
             ),
             certificate_key_contents=obj.get("certificate_key_contents", ""),
-            server_mode=obj.get("server_mode", ""),
+            server_mode=_parse_enum(
+                obj.get("server_mode", ""),
+                ClientServerMode,
+                ClientServerMode.Unknown,
+            ),
             server_name=obj.get("server_name", ""),
             trusted_certificates_location=CertificateLocation.from_string(
                 obj.get("trusted_certificates_location", "")
@@ -547,16 +555,17 @@ class ClientConfig(_BaseConfig):
         self.service_name = service_name
         self.server_address = server_address
         self._data = self._find_service_data(service_name)
+        self._resolved_data = self._data
         if server_address is not None:
             known_server = next(
                 (item for item in self._data.known_servers if item.server_name == server_address),
                 None,
             )
             if known_server is not None:
-                self._data = ServiceData(
-                    raw=known_server.raw,
-                    known_servers=self._data.known_servers,
-                )
+                self._resolved_data = ServiceData(raw=known_server.raw)
+
+    def _value(self, key: str, default: str = "") -> str:
+        return self._resolved_data.value(key, default)
 
     @property
     def certificate_mode(self) -> ClientCertMode:

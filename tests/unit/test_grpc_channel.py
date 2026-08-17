@@ -348,8 +348,7 @@ def test_invalid_configuration_raises(
 def test_service_name_and_address_are_forwarded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The helper discards service_name, so plumbing needs its own check.
-    requested = []
+    requested: list[tuple[str, str]] = []
 
     def record_client_config(service_name: str, server_address: str) -> FakeClientConfig:
         requested.append((service_name, server_address))
