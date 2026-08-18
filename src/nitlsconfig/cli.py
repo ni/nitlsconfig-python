@@ -197,6 +197,47 @@ class KnownServerData:
     """Typed wrapper for known server objects from CLI JSON."""
 
     raw: dict[str, Any]
+    display_name: str = field()
+    certificate_mode: ClientCertMode = field()
+    certificate_chain_location: CertificateLocation = field()
+    certificate_chain_contents: str = field()
+    certificate_key_location: CertificateLocation = field()
+    certificate_key_contents: str = field()
+    server_mode: ClientServerMode = field()
+    server_name: str = field()
+    trusted_certificates_location: CertificateLocation = field()
+    trusted_certificates_contents: str = field()
+
+    @classmethod
+    def from_json_obj(cls, obj: dict[str, Any]) -> "KnownServerData":
+        "Parse a known server object from CLI JSON into KnownServerData."
+        return cls(
+            raw=obj,
+            display_name=obj.get("display_name_en", ""),
+            certificate_mode=_parse_enum(
+                obj.get("certificate_mode", ""),
+                ClientCertMode,
+                ClientCertMode.Unknown,
+            ),
+            certificate_chain_location=CertificateLocation.from_string(
+                obj.get("certificate_chain_location", "")
+            ),
+            certificate_chain_contents=obj.get("certificate_chain_contents", ""),
+            certificate_key_location=CertificateLocation.from_string(
+                obj.get("certificate_key_location", "")
+            ),
+            certificate_key_contents=obj.get("certificate_key_contents", ""),
+            server_mode=_parse_enum(
+                obj.get("server_mode", ""),
+                ClientServerMode,
+                ClientServerMode.Unknown,
+            ),
+            server_name=obj.get("server_name", ""),
+            trusted_certificates_location=CertificateLocation.from_string(
+                obj.get("trusted_certificates_location", "")
+            ),
+            trusted_certificates_contents=obj.get("trusted_certificates_contents", ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -237,7 +278,7 @@ class ServiceData:
         if isinstance(known_servers_raw, list):
             for item in known_servers_raw:
                 if isinstance(item, dict):
-                    known_servers.append(KnownServerData(raw=item))
+                    known_servers.append(KnownServerData.from_json_obj(item))
 
         trusted_certificates_raw = obj.get("trusted_certificates", [])
         trusted_certificates: list[TrustedCertificateData] = []
@@ -505,6 +546,31 @@ class ClientConfig(_BaseConfig):
 
     _scope = "client"
 
+    def __init__(self, service_name: str, server_address: Optional[str] = None) -> None:
+        """Read client configuration, optionally resolved for a server address.
+
+        When ``server_address`` matches a known server, its configuration is used.
+        Otherwise, the generic service configuration remains in effect.
+        """
+        self.service_name = service_name
+        self.server_address = server_address
+        self._data = self._find_service_data(service_name)
+        # _data always contains the default service data. When server_address
+        # matches a known_servers entry, _resolved_data uses that configuration;
+        # otherwise, it retains the default service data. Client settings are read
+        # from _resolved_data.
+        self._resolved_data = self._data
+        if server_address is not None:
+            known_server = next(
+                (item for item in self._data.known_servers if item.server_name == server_address),
+                None,
+            )
+            if known_server is not None:
+                self._resolved_data = ServiceData(raw=known_server.raw)
+
+    def _value(self, key: str, default: str = "") -> str:
+        return self._resolved_data.value(key, default)
+
     @property
     def certificate_mode(self) -> ClientCertMode:
         "Parse certificate_mode string into ClientCertMode enum, defaulting to Unknown."
@@ -535,7 +601,7 @@ class ClientConfig(_BaseConfig):
 
     @property
     def known_servers(self) -> list[KnownServerData]:
-        "Return the raw known_servers list from the service configuration."
+        "Return the typed known-server configurations from the service configuration."
         return self._data.known_servers
 
     @property

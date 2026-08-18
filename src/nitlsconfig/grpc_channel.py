@@ -341,8 +341,9 @@ def create_grpc_client_channel(
     default until the machine is configured.
 
     Args:
-        server_address: Host name or address of the NI gRPC Device Server. IPv6
-            literals may be passed with or without brackets.
+        server_address: Host name or address of the NI gRPC Device Server. Also used
+            to resolve NI-TLS settings specific to this target. IPv6 literals may be
+            passed with or without brackets.
         server_port: Port of the NI gRPC Device Server.
         service_name: nitlsconfig service name to read configuration from.
         options: gRPC channel arguments, as ``(key, value)`` pairs. Use this to
@@ -366,7 +367,7 @@ def create_grpc_client_channel(
     target = _format_target(server_address, server_port)
     channel_options = _apply_retry_policy(options, retry_policy)
 
-    settings = _load_client_tls_settings(ClientConfig(service_name))
+    settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
     if settings is None:
         return grpc.insecure_channel(target, options=channel_options)
 
