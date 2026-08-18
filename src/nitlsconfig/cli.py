@@ -555,6 +555,10 @@ class ClientConfig(_BaseConfig):
         self.service_name = service_name
         self.server_address = server_address
         self._data = self._find_service_data(service_name)
+        # _data always contains the default service data. When server_address
+        # matches a known_servers entry, _resolved_data uses that configuration;
+        # otherwise, it retains the default service data. Client settings are read
+        # from _resolved_data.
         self._resolved_data = self._data
         if server_address is not None:
             known_server = next(
