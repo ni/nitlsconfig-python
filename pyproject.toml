@@ -32,7 +32,7 @@ dynamic = ["dependencies"]
 grpc = ["grpcio>=1.49.0,<2.0"]
 
 [project.urls]
-repository = "https://github.com/ni/pypi-nitlsconfig"
+repository = "https://github.com/ni/nitlsconfig-python"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
