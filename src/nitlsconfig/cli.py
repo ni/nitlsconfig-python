@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import pathlib
-import platform
 import subprocess  # nosec B404 - required to invoke the trusted nitlsconfig CLI
 import sys
 from dataclasses import dataclass, field
@@ -334,30 +331,9 @@ def run_nitlsconfig_command(
             timeout=30,
         )  # nosec B603 - argv is passed shell-free and executable selection is controlled
     except FileNotFoundError as ex:
-        fallback_root = os.environ.get(NITLSCONFIG_CLI_ENV_VAR)
-        if fallback_root and fallback_root != executable:
-            suffix = ".exe" if platform.system().lower() == "windows" else ""
-            fallback_executable = pathlib.Path(fallback_root) / f"nitlsconfig{suffix}"
-            fallback_executable_str = str(fallback_executable)
-            fallback_argv = [fallback_executable_str, *command_args]
-            try:
-                completed = subprocess.run(
-                    fallback_argv,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=30,
-                )  # nosec B603 - argv is passed shell-free and fallback executable is explicit
-                argv = fallback_argv
-            except FileNotFoundError as fallback_ex:
-                raise ExecutableNotFoundError(
-                    "Unable to find nitlsconfig executable. "
-                    f"Tried {executable!r} and {NITLSCONFIG_CLI_ENV_VAR}={fallback_root!r}."
-                ) from fallback_ex
-        else:
-            raise ExecutableNotFoundError(
-                "Unable to find nitlsconfig executable. " f"Tried {executable!r}."
-            ) from ex
+        raise ExecutableNotFoundError(
+            "Unable to find nitlsconfig executable. " f"Tried {executable!r}."
+        ) from ex
 
     if completed.returncode != 0:
         command_display = " ".join(argv)
