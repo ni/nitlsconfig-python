@@ -12,8 +12,6 @@ from typing import Any, Optional, Tuple, TypeVar
 
 ALLOWED_SCOPES: Tuple[str, ...] = ("client", "server")
 
-NITLSCONFIG_CLI_ENV_VAR = "NITLSCONFIG_CLI"
-
 # Expected JSON root keys from nitlsconfig output.
 ROLE_TO_JSON_ROOT_KEY = {
     "client": "client",

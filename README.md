@@ -8,7 +8,7 @@ Installed and imported as `nitlsconfig`; developed at
 
 ## Runtime dependencies
 
-- nitlsconfig executable, discoverable, or explicit path to NITLSCONFIG_CLI
+- nitlsconfig executable, discoverable.
 
 ## Install
 
