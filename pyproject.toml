@@ -36,6 +36,9 @@ grpc = ["grpcio>=1.49.0,<2.0", "pywin32>=306; sys_platform == 'win32'"]
 [project.urls]
 repository = "https://github.com/ni/nitlsconfig-python"
 
+[project.scripts]
+nitlsconfig-read = "nitlsconfig.cli:nitlsconfig_main"
+
 [build-system]
 requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
@@ -74,9 +77,6 @@ sphinx-rtd-theme = ">=1.0.0"
 sphinx-autoapi = ">=1.8.4"
 m2r2 = ">=0.3.2"
 toml = ">=0.10.2"
-
-[tool.poetry.scripts]
-nitlsconfig-read = "nitlsconfig.cli:nitlsconfig_main"
 
 [tool.pytest_env]
 env_files = [".env"]
