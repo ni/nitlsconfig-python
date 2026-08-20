@@ -1,6 +1,6 @@
 [project]
 name = "nitlsconfig"
-version = "1.0.0.dev1"
+version = "1.0.0a1"
 license = "MIT"
 description = "Python API for reading nitlsconfig configurations and creating gRPC client channels from them"
 authors = [{name = "NI", email = "opensource@ni.com"}]
@@ -10,7 +10,7 @@ maintainers = [
 readme = "README.md"
 keywords = ["nitlsconfig", "tls", "mtls", "grpc", "configuration"]
 classifiers = [
-	"Development Status :: 4 - Beta",
+	"Development Status :: 3 - Alpha",
 	"Intended Audience :: Developers",
 	"License :: OSI Approved :: MIT License",
 	"Operating System :: Microsoft :: Windows",
@@ -34,7 +34,7 @@ dynamic = ["dependencies"]
 grpc = ["grpcio>=1.49.0,<2.0", "pywin32>=306; sys_platform == 'win32'"]
 
 [project.urls]
-repository = "https://github.com/ni/pypi-nitlsconfig"
+repository = "https://github.com/ni/nitlsconfig-python"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
