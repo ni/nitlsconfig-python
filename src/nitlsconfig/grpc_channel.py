@@ -46,6 +46,11 @@ from typing import Any, Optional, Sequence, Tuple
 
 import grpc
 
+from nitlsconfig.audit import (
+    TransportSecurity,
+    audit_transport_posture,
+    tag_channel_target,
+)
 from nitlsconfig.cli import (
     CertificateLocation,
     ClientCertMode,
@@ -368,7 +373,24 @@ def create_grpc_client_channel(
     channel_options = _apply_retry_policy(options, retry_policy)
 
     settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
-    if settings is None:
-        return grpc.insecure_channel(target, options=channel_options)
 
-    return grpc.secure_channel(target, _make_client_credentials(settings), options=channel_options)
+    if settings is None:
+        audit_transport_posture(service_name, server_address, TransportSecurity.Unencrypted)
+        channel = grpc.insecure_channel(target, options=channel_options)
+        tag_channel_target(channel, target)
+        return channel
+
+    audit_transport_posture(
+        service_name,
+        server_address,
+        (
+            TransportSecurity.MutualTls
+            if settings.present_client_cert
+            else TransportSecurity.ServerAuthenticatedTls
+        ),
+    )
+    channel = grpc.secure_channel(
+        target, _make_client_credentials(settings), options=channel_options
+    )
+    tag_channel_target(channel, target)
+    return channel
