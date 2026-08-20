@@ -41,6 +41,7 @@ import sys
 import threading
 from enum import Enum
 
+_SERVICE_NAME = "ni-grpc-device"
 _ROLE = "Client"
 
 
@@ -52,7 +53,6 @@ class TransportSecurity(Enum):
     MutualTls = "mutual_tls"
 
 
-_SERVICE_NAME = "ni-grpc-device"
 
 # Whether the audit logger has had its logging handler attached. The lock guards
 # the check-then-set below: without it, threads creating channels can each attach
