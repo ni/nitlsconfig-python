@@ -60,7 +60,10 @@ def tag_channel_target(channel: object, target: str) -> None:
     try:
         setattr(channel, _TARGET_ATTR, target)
     except Exception:
-        pass  # A channel type without an instance dict goes unaudited rather than unnamed.
+        logging.getLogger(__name__).debug(
+            "Unable to tag channel for audit logging; the channel will go unaudited.",
+            exc_info=True,
+        )
 
 
 def _make_logging_handler(service_name: str) -> logging.Handler:
@@ -139,7 +142,7 @@ def audit_transport_posture(service_name: str, peer_host: str, security: Transpo
         else:
             logger.warning(message)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unable to record transport audit event.", exc_info=True)
 
 
 def audit_session_connect(
@@ -170,4 +173,4 @@ def audit_session_connect(
         else:
             logger.error(message)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unable to record session audit event.", exc_info=True)
