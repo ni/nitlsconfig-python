@@ -41,7 +41,7 @@ name gRPC matches against the certificate; it does not disable verification.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional, Sequence, Tuple
 
 import grpc
@@ -136,7 +136,8 @@ class _ClientTlsSettings:
 
     present_client_cert: bool
     certificate_chain_contents: str
-    private_key_contents: str
+    # Kept out of the generated repr so a traceback or debug log cannot print the key.
+    private_key_contents: str = field(repr=False)
     trusted_contents: str
 
 
@@ -375,22 +376,22 @@ def create_grpc_client_channel(
     settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
 
     if settings is None:
-        audit_transport_posture(service_name, server_address, TransportSecurity.Unencrypted)
-        channel = grpc.insecure_channel(target, options=channel_options)
-        tag_channel_target(channel, target)
-        return channel
+        security = TransportSecurity.Unencrypted
+    elif settings.present_client_cert:
+        security = TransportSecurity.MutualTls
+    else:
+        security = TransportSecurity.ServerAuthenticatedTls
 
-    audit_transport_posture(
-        service_name,
-        server_address,
-        (
-            TransportSecurity.MutualTls
-            if settings.present_client_cert
-            else TransportSecurity.ServerAuthenticatedTls
-        ),
-    )
-    channel = grpc.secure_channel(
-        target, _make_client_credentials(settings), options=channel_options
-    )
+    # Auditing covers the NI gRPC Device Server only, so a channel for any other
+    # service goes unaudited rather than being recorded under the wrong service.
+    if service_name == DEFAULT_SERVICE_NAME:
+        audit_transport_posture(server_address, security)
+
+    if settings is None:
+        channel = grpc.insecure_channel(target, options=channel_options)
+    else:
+        channel = grpc.secure_channel(
+            target, _make_client_credentials(settings), options=channel_options
+        )
     tag_channel_target(channel, target)
     return channel

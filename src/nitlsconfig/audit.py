@@ -1,6 +1,6 @@
 """Audit logging for NI-TLS client transports.
 
-Writes to the platformaudit log similarly to other NI gRPC clients:
+Writes to the platform audit log similarly to other NI gRPC clients:
 
 Windows: Windows Event Log
 Linux: syslog
@@ -23,6 +23,15 @@ Transport posture is emitted by the channel factory.
 The session connect record cannot be: it reports the outcome of a driver's
 initialize RPC, and a gRPC channel connects lazily, so the API layer that
 issues that RPC has to call ``audit_session_connect`` itself.
+
+Auditing covers the NI gRPC Device Server only, so the service name is fixed
+here rather than accepted from callers. Should another service ever need audit
+records, this module grows a service parameter again at that point.
+
+Records report what this package observed, assuming the hosting process is not
+hostile. Nothing here can defend against code in the same process, which can
+call the standard library logger directly. Untrusted *values* reaching a record
+are bounded and escaped below, because those do cross a trust boundary.
 """
 
 from __future__ import annotations
@@ -43,16 +52,38 @@ class TransportSecurity(Enum):
     MutualTls = "mutual_tls"
 
 
-# Names of services whose audit logger has already had its logging handler attached.
-# The lock guards the check-then-add below: without it, threads creating channels
-# for the same service can each attach a logging handler and double every record.
+_SERVICE_NAME = "ni-grpc-device"
+
+# Whether the audit logger has had its logging handler attached. The lock guards
+# the check-then-set below: without it, threads creating channels can each attach
+# a logging handler and double every record.
 _logging_handler_lock = threading.Lock()
-_services_with_logging_handler: set[str] = set()
+_logging_handler_attached = False
 
 # Set on channels we create. Carries the address audit_session_connect reports, and
 # marks the channel as ours: the API layer issuing the initialize RPC holds only the
 # channel, and cannot otherwise tell whether NI-TLS had any part in building it.
 _TARGET_ATTR = "_nitls_audit_target"
+
+_MAX_FIELD_LENGTH = 256
+
+
+def _audit_field(value: object) -> str:
+    """Return a bounded audit field with record-breaking characters escaped.
+
+    Escaping runs before the bound, so the returned length is the real limit;
+    escaping afterwards could double it.
+    """
+    escaped = str(value).replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
+    if len(escaped) <= _MAX_FIELD_LENGTH:
+        return escaped
+
+    truncated = escaped[: _MAX_FIELD_LENGTH - 3]
+    # Cutting mid-escape would leave a trailing backslash that escapes the quote
+    # the message puts after this field.
+    if (len(truncated) - len(truncated.rstrip("\\"))) % 2:
+        truncated = truncated[:-1]
+    return truncated + "..."
 
 
 def tag_channel_target(channel: object, target: str) -> None:
@@ -66,7 +97,7 @@ def tag_channel_target(channel: object, target: str) -> None:
         )
 
 
-def _make_logging_handler(service_name: str) -> logging.Handler:
+def _make_logging_handler() -> logging.Handler:
     """Create the platform audit logging handler.
 
     Falls back to a null logging handler when the platform log is unreachable.
@@ -78,7 +109,7 @@ def _make_logging_handler(service_name: str) -> logging.Handler:
         if sys.platform == "win32":
             from logging.handlers import NTEventLogHandler
 
-            return NTEventLogHandler(service_name)
+            return NTEventLogHandler(_SERVICE_NAME)
 
         from logging.handlers import SysLogHandler
 
@@ -87,44 +118,47 @@ def _make_logging_handler(service_name: str) -> logging.Handler:
         # The platform logging handler failed, not `logging` itself; this diagnostic
         # goes to the host application's ordinary logger, never to the audit channel.
         logging.getLogger(__name__).warning(
-            "NI-TLS audit logging is unavailable on this system; TLS transport "
-            "posture will not be recorded.",
+            "NI-TLS audit logging is unavailable on this system; audit events "
+            "will not be recorded.",
             exc_info=True,
         )
         return logging.NullHandler()
 
 
-def _get_audit_logger(service_name: str) -> logging.Logger:
-    """Return the audit logger for a service, attaching its logging handler on first use.
+def _get_audit_logger() -> logging.Logger:
+    """Return the audit logger, attaching its logging handler on first use.
 
-    Tracks the services we have set up rather than inspecting ``logger.handlers``,
-    since anything else in the process may attach logging handlers to the same
-    logger and would otherwise make an unconfigured logger look ready.
+    Tracks setup ourselves rather than inspecting ``logger.handlers``, since
+    anything else in the process may attach logging handlers to the same logger
+    and would otherwise make an unconfigured logger look ready.
     """
-    logger = logging.getLogger(f"nitlsconfig.audit.{service_name}.{_ROLE}")
+    global _logging_handler_attached
+
+    logger = logging.getLogger(f"nitlsconfig.audit.{_SERVICE_NAME}.{_ROLE}")
 
     with _logging_handler_lock:
-        if service_name not in _services_with_logging_handler:
+        if not _logging_handler_attached:
             logger.setLevel(logging.INFO)
             # Audit records belong in the platform audit log, not in whatever
             # logging the host application has configured on the root logger.
             logger.propagate = False
 
-            handler = _make_logging_handler(service_name)
-            handler.setFormatter(logging.Formatter(f"[{service_name}][{_ROLE}] %(message)s"))
+            handler = _make_logging_handler()
+            handler.setFormatter(logging.Formatter(f"[{_SERVICE_NAME}][{_ROLE}] %(message)s"))
             logger.addHandler(handler)
-            _services_with_logging_handler.add(service_name)
+            _logging_handler_attached = True
 
     return logger
 
 
-def audit_transport_posture(service_name: str, peer_host: str, security: TransportSecurity) -> None:
+def audit_transport_posture(peer_host: str, security: TransportSecurity) -> None:
     """Record the security posture of a client transport.
 
     Never raises: auditing must not disrupt transport creation.
     """
     try:
-        message = f"Client transport for service '{service_name}'"
+        peer_host = _audit_field(peer_host)
+        message = f"Client transport for service '{_SERVICE_NAME}'"
         if peer_host:
             message += f" to '{peer_host}'"
 
@@ -135,7 +169,7 @@ def audit_transport_posture(service_name: str, peer_host: str, security: Transpo
         else:
             message += " uses mutual TLS. Presenting a client certificate."
 
-        logger = _get_audit_logger(service_name)
+        logger = _get_audit_logger()
         # Mutual TLS is the secure baseline; weaker postures are auditable warnings.
         if security is TransportSecurity.MutualTls:
             logger.info(message)
@@ -145,9 +179,7 @@ def audit_transport_posture(service_name: str, peer_host: str, security: Transpo
         logging.getLogger(__name__).debug("Unable to record transport audit event.", exc_info=True)
 
 
-def audit_session_connect(
-    service_name: str, driver_name: str, channel: object, connected: bool
-) -> None:
+def audit_session_connect(driver_name: str, channel: object, connected: bool) -> None:
     """Record the outcome of a driver's gRPC session initialize RPC. Never raises.
 
     Call this from the API layer once the initialize RPC returns, passing the
@@ -164,10 +196,13 @@ def audit_session_connect(
         if not target:
             return
 
+        driver_name = _audit_field(driver_name)
+        target = _audit_field(target)
+
         outcome = "connected" if connected else "failed to connect"
         message = f"{driver_name} gRPC session {outcome} on hostname '{target}'"
 
-        logger = _get_audit_logger(service_name)
+        logger = _get_audit_logger()
         if connected:
             logger.info(message)
         else:

@@ -33,14 +33,13 @@ class RecordingHandler(logging.Handler):
 
 # Between tests, we want to reset the state of the audit logger
 # to ensure each test starts with a clean slate.
-def reset_logger(service_name: str = SERVICE) -> logging.Logger:
+def reset_logger() -> logging.Logger:
     """Detach our logging handler so the next call reconfigures the process-global logger."""
-    # Our audit logger tracks which services have had handlers registered
-    # for them and stores the name of the service.
-    audit._services_with_logging_handler.discard(service_name)
-    # Find the logger handler for the service after discarding the name
-    # of it from the set and discard it as well.
-    logger = logging.getLogger(f"nitlsconfig.audit.{service_name}.Client")
+    # Our audit logger records that it has already attached its handler.
+    audit._logging_handler_attached = False
+    # Find the logger handler for the service after clearing that flag
+    # and discard it as well.
+    logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE}.Client")
     for handler in list(logger.handlers):
         logger.removeHandler(handler)
     return logger
@@ -52,7 +51,7 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> Iterator[RecordingHandler]:
     handler = RecordingHandler()
     # We use monkeypatch to replace the creation of the platform audit loggers with the creation
     # of our test-specific audit recording handler instead.
-    monkeypatch.setattr(audit, "_make_logging_handler", lambda service_name: handler)
+    monkeypatch.setattr(audit, "_make_logging_handler", lambda: handler)
     # During set-up and before giving the handler to our tests, reset the state.
     reset_logger()
     # We yield the handler to provide the test the handler object to operate against.
@@ -72,7 +71,7 @@ def only_message(recorded: RecordingHandler) -> str:
 
 
 def test___mutual_tls___logs_mutual_tls_posture_as_info(recorded: RecordingHandler) -> None:
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
 
     assert only_message(recorded) == (
         "Client transport for service 'ni-grpc-device' to 'localhost' "
@@ -82,7 +81,7 @@ def test___mutual_tls___logs_mutual_tls_posture_as_info(recorded: RecordingHandl
 
 
 def test___one_way_tls___logs_one_way_posture_as_warning(recorded: RecordingHandler) -> None:
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.ServerAuthenticatedTls)
+    audit_transport_posture(HOST, TransportSecurity.ServerAuthenticatedTls)
 
     assert only_message(recorded) == (
         "Client transport for service 'ni-grpc-device' to 'localhost' "
@@ -92,7 +91,7 @@ def test___one_way_tls___logs_one_way_posture_as_warning(recorded: RecordingHand
 
 
 def test___unencrypted___logs_unencrypted_posture_as_warning(recorded: RecordingHandler) -> None:
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.Unencrypted)
+    audit_transport_posture(HOST, TransportSecurity.Unencrypted)
 
     assert only_message(recorded) == (
         "Client transport for service 'ni-grpc-device' to 'localhost' "
@@ -102,12 +101,43 @@ def test___unencrypted___logs_unencrypted_posture_as_warning(recorded: Recording
 
 
 def test___no_peer_host___omits_host_clause(recorded: RecordingHandler) -> None:
-    audit_transport_posture(SERVICE, "", TransportSecurity.MutualTls)
+    audit_transport_posture("", TransportSecurity.MutualTls)
 
     assert only_message(recorded) == (
         "Client transport for service 'ni-grpc-device' "
         "uses mutual TLS. Presenting a client certificate."
     )
+
+
+def test___transport_fields_with_newlines___escape_record_breaking_characters(
+    recorded: RecordingHandler,
+) -> None:
+    audit_transport_posture("host\r\nforged-entry", TransportSecurity.MutualTls)
+
+    assert only_message(recorded) == (
+        "Client transport for service 'ni-grpc-device' to 'host\\r\\nforged-entry' "
+        "uses mutual TLS. Presenting a client certificate."
+    )
+
+
+def test___audit_fields_over_maximum_length___are_truncated(recorded: RecordingHandler) -> None:
+    peer_host = "h" * (audit._MAX_FIELD_LENGTH + 10)
+
+    audit_transport_posture(peer_host, TransportSecurity.MutualTls)
+
+    assert only_message(recorded) == (
+        "Client transport for service 'ni-grpc-device' to '"
+        + "h" * (audit._MAX_FIELD_LENGTH - 3)
+        + "...' uses mutual TLS. Presenting a client certificate."
+    )
+
+
+def test___escaping_grows_a_field_past_the_maximum___bound_still_holds() -> None:
+    field = audit._audit_field("\\" * audit._MAX_FIELD_LENGTH)
+
+    assert len(field) <= audit._MAX_FIELD_LENGTH
+    # A trailing lone backslash would escape the quote the message puts after the field.
+    assert (len(field) - len(field.rstrip("\\"))) % 2 == 0
 
 
 class FakeChannel:
@@ -118,7 +148,7 @@ def test___session_connected___logs_connect_as_info(recorded: RecordingHandler) 
     channel = FakeChannel()
     audit.tag_channel_target(channel, "localhost:31763")
 
-    audit_session_connect(SERVICE, "NI-DCPower", channel, True)
+    audit_session_connect("NI-DCPower", channel, True)
 
     assert only_message(recorded) == (
         "NI-DCPower gRPC session connected on hostname 'localhost:31763'"
@@ -130,7 +160,7 @@ def test___session_not_connected___logs_failure_as_error(recorded: RecordingHand
     channel = FakeChannel()
     audit.tag_channel_target(channel, "localhost:31763")
 
-    audit_session_connect(SERVICE, "NI-DCPower", channel, False)
+    audit_session_connect("NI-DCPower", channel, False)
 
     assert only_message(recorded) == (
         "NI-DCPower gRPC session failed to connect on hostname 'localhost:31763'"
@@ -138,8 +168,22 @@ def test___session_not_connected___logs_failure_as_error(recorded: RecordingHand
     assert recorded.records[0].levelno == logging.ERROR
 
 
+def test___session_fields_with_newlines___escape_record_breaking_characters(
+    recorded: RecordingHandler,
+) -> None:
+    channel = FakeChannel()
+    audit.tag_channel_target(channel, "localhost\r\nforged-entry")
+
+    audit_session_connect("driver\rname", channel, True)
+
+    assert only_message(recorded) == (
+        "driver\\rname gRPC session connected on hostname 'localhost\\r\\nforged-entry'"
+    )
+    assert recorded.records[0].name == f"nitlsconfig.audit.{SERVICE}.Client"
+
+
 def test___untagged_channel___emits_no_record(recorded: RecordingHandler) -> None:
-    audit_session_connect(SERVICE, "NI-DCPower", FakeChannel(), True)
+    audit_session_connect("NI-DCPower", FakeChannel(), True)
 
     assert recorded.records == []
 
@@ -154,11 +198,11 @@ def test___channel_rejects_attributes___tagging_does_not_raise() -> None:
 def test___audit_logger___formats_with_service_and_role_prefix(
     recorded: RecordingHandler,
 ) -> None:
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
 
-    formatted = recorded.records[0].__dict__
+    formatted = recorded.format(recorded.records[0])
     logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE}.Client")
-    assert formatted["name"] == logger.name
+    assert formatted.startswith(f"[{SERVICE}][Client] ")
     # Audit records must not leak into the host application's logging configuration.
     assert logger.propagate is False
 
@@ -166,8 +210,8 @@ def test___audit_logger___formats_with_service_and_role_prefix(
 def test___same_service_requested_twice___reuses_one_logger(
     recorded: RecordingHandler,
 ) -> None:
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
 
     logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE}.Client")
     assert len(recorded.records) == 2
@@ -177,13 +221,13 @@ def test___same_service_requested_twice___reuses_one_logger(
 def test___logging_handler_cannot_be_created___does_not_raise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def explode(service_name: str) -> logging.Handler:
+    def explode() -> logging.Handler:
         raise OSError("no audit logging handler here")
 
     monkeypatch.setattr(audit, "_make_logging_handler", explode)
     reset_logger()
 
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
 
 
 def test___logging_handler_raises___does_not_disrupt_caller(
@@ -196,11 +240,11 @@ def test___logging_handler_raises___does_not_disrupt_caller(
         def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802 - logging API
             raise RuntimeError("audit logging handler failed")
 
-    monkeypatch.setattr(audit, "_make_logging_handler", lambda service_name: ExplodingHandler())
+    monkeypatch.setattr(audit, "_make_logging_handler", lambda: ExplodingHandler())
     reset_logger()
 
     channel = FakeChannel()
     audit.tag_channel_target(channel, "localhost:31763")
 
-    audit_transport_posture(SERVICE, HOST, TransportSecurity.MutualTls)
-    audit_session_connect(SERVICE, "NI-DCPower", channel, False)
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
+    audit_session_connect("NI-DCPower", channel, False)
