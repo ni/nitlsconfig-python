@@ -4,7 +4,7 @@ Python API that reads nitlsconfig configurations through the `nitlsconfig` comma
 and builds gRPC client channels from them.
 
 Installed and imported as `nitlsconfig`; developed at
-[ni/pypi-nitlsconfig](https://github.com/ni/pypi-nitlsconfig).
+[ni/nitlsconfig-python](https://github.com/ni/nitlsconfig-python).
 
 ## Runtime dependencies
 

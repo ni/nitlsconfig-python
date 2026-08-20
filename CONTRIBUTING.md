@@ -1,11 +1,11 @@
-# Contributing to pypi-nitlsconfig
+# Contributing to nitlsconfig-python
 
-Contributions to pypi-nitlsconfig are welcome from all!
+Contributions to nitlsconfig-python are welcome from all!
 
-pypi-nitlsconfig is managed via [git](https://git-scm.com), with the canonical upstream
-repository hosted on [GitHub](https://github.com/ni/pypi-nitlsconfig/).
+nitlsconfig-python is managed via [git](https://git-scm.com), with the canonical upstream
+repository hosted on [GitHub](https://github.com/ni/nitlsconfig-python/).
 
-pypi-nitlsconfig follows a pull-request model for development.  If you wish to
+nitlsconfig-python follows a pull-request model for development.  If you wish to
 contribute, you will need to create a GitHub account, fork this project, push a
 branch with your changes to your project, and then submit a pull request.
 
@@ -25,8 +25,8 @@ To contribute to this project, it is recommended that you follow these steps:
 
 1. Ensure you have poetry installed.
 1. Fork the repository on GitHub.
-1. Install `pypi-nitlsconfig` dependencies using `poetry install`.
-1. Run the regression tests on your system (see Testing section). At this point, if any tests fail, do not begin development. Try to investigate these failures. If you're unable to do so, report an issue through our [GitHub issues page](https://github.com/ni/pypi-nitlsconfig/issues).
+1. Install `nitlsconfig-python` dependencies using `poetry install`.
+1. Run the regression tests on your system (see Testing section). At this point, if any tests fail, do not begin development. Try to investigate these failures. If you're unable to do so, report an issue through our [GitHub issues page](https://github.com/ni/nitlsconfig-python/issues).
 1. Write new tests that demonstrate your bug or feature. Ensure that these new tests fail.
 1. Make your change.
 1. Run all the regression tests again (including the tests you just added), and confirm that they all pass.
@@ -63,11 +63,11 @@ poetry run pytest -v
 # Publishing on PyPI
 
 You can publish the nitlsconfig package by creating a GitHub release
-in the pypi-nitlsconfig repo. Here are the steps to follow to publish the package:
+in the nitlsconfig-python repo. Here are the steps to follow to publish the package:
 
 1. From the main GitHub repo page, select "Create a new release".
-2. On the "New Release" page, create a new tag using the "Select Tag" drop down. The tag must be the package version, matching the value found in pyproject.toml. Example: `1.0.0`.
-3. Enter a title in the "Release title" field. The title should contain the package name and version in the format `nitlsconfig <package-version>`. For example: `nitlsconfig 1.0.0`.
+2. On the "New Release" page, create a new tag using the "Select Tag" drop down. The tag must be the package version, matching the value found in pyproject.toml. Example: `1.0.0a1`.
+3. Enter a title in the "Release title" field. The title should contain the package name and version in the format `nitlsconfig <package-version>`. For example: `nitlsconfig 1.0.0a1`.
 4. Click "Generate release notes" and edit the release notes.
   - Delete entries for PRs that do not affect users, such as "chore(deps):" and "fix(deps):" PRs.
   - Consider grouping related entries.
@@ -109,5 +109,5 @@ in the pypi-nitlsconfig repo. Here are the steps to follow to publish the packag
 
 (taken from [developercertificate.org](https://developercertificate.org/))
 
-See [LICENSE](https://github.com/ni/pypi-nitlsconfig/blob/main/LICENSE)
-for details about how pypi-nitlsconfig is licensed.
+See [LICENSE](https://github.com/ni/nitlsconfig-python/blob/main/LICENSE)
+for details about how nitlsconfig-python is licensed.
