@@ -40,10 +40,3 @@ jobs:
     name: Run unit tests
     uses: ./.github/workflows/run_unit_tests.yml
     needs: [checks_succeeded]
-  report_test_results:
-    name: Report test results
-    uses: ./.github/workflows/report_test_results.yml
-    needs: [run_unit_tests]
-    if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_results) }}
-    with:
-      publish_results: ${{ inputs.report_results }}
