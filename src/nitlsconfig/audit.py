@@ -53,7 +53,6 @@ class TransportSecurity(Enum):
     MutualTls = "mutual_tls"
 
 
-
 # Whether the audit logger has had its logging handler attached. The lock guards
 # the check-then-set below: without it, threads creating channels can each attach
 # a logging handler and double every record.
