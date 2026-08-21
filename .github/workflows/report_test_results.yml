@@ -2,10 +2,26 @@ name: Report test results
 
 on:
   workflow_call:
+    inputs:
+      publish_results:
+        description: Publish test and check results.
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
+    inputs:
+      publish_results:
+        description: Publish test and check results.
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
   report_test_results:
+    if: ${{ always() && inputs.publish_results }}
     name: Report test results
     runs-on: ubuntu-latest
     permissions:
