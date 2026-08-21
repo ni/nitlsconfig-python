@@ -27,12 +27,17 @@ requires-python = ">=3.9"
 dynamic = ["dependencies"]
 
 # Reading NI-TLS configuration is pure Python. Only nitlsconfig.grpc_channel
-# needs grpcio, so the binary wheel is opt-in.
+# needs grpcio, so the binary wheel is opt-in. pywin32 rides along with it
+# because audit records are only produced when a channel is created, and the
+# Windows Event Log logging handler cannot be written to without it.
 [project.optional-dependencies]
-grpc = ["grpcio>=1.49.0,<2.0"]
+grpc = ["grpcio>=1.49.0,<2.0", "pywin32>=306; sys_platform == 'win32'"]
 
 [project.urls]
 repository = "https://github.com/ni/nitlsconfig-python"
+
+[project.scripts]
+nitlsconfig-read = "nitlsconfig.cli:nitlsconfig_main"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
@@ -72,9 +77,6 @@ sphinx-rtd-theme = ">=1.0.0"
 sphinx-autoapi = ">=1.8.4"
 m2r2 = ">=0.3.2"
 toml = ">=0.10.2"
-
-[tool.poetry.scripts]
-nitlsconfig-read = "nitlsconfig.cli:nitlsconfig_main"
 
 [tool.pytest_env]
 env_files = [".env"]

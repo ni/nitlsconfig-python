@@ -41,11 +41,16 @@ name gRPC matches against the certificate; it does not disable verification.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional, Sequence, Tuple
 
 import grpc
 
+from nitlsconfig.audit import (
+    TransportSecurity,
+    audit_transport_posture,
+    tag_channel_target,
+)
 from nitlsconfig.cli import (
     CertificateLocation,
     ClientCertMode,
@@ -131,7 +136,8 @@ class _ClientTlsSettings:
 
     present_client_cert: bool
     certificate_chain_contents: str
-    private_key_contents: str
+    # Kept out of the generated repr so a traceback or debug log cannot print the key.
+    private_key_contents: str = field(repr=False)
     trusted_contents: str
 
 
@@ -368,7 +374,28 @@ def create_grpc_client_channel(
     channel_options = _apply_retry_policy(options, retry_policy)
 
     settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
-    if settings is None:
-        return grpc.insecure_channel(target, options=channel_options)
 
-    return grpc.secure_channel(target, _make_client_credentials(settings), options=channel_options)
+    if settings is None:
+        security = TransportSecurity.Unencrypted
+    elif settings.present_client_cert:
+        security = TransportSecurity.MutualTls
+    else:
+        security = TransportSecurity.ServerAuthenticatedTls
+
+    # Auditing covers the NI gRPC Device Server only, so a channel for any other
+    # service goes unaudited rather than being recorded under the wrong service.
+    # The tag gates the session record the same way this gates the posture record.
+    audited = service_name == DEFAULT_SERVICE_NAME
+
+    if audited:
+        audit_transport_posture(server_address, security)
+
+    if settings is None:
+        channel = grpc.insecure_channel(target, options=channel_options)
+    else:
+        channel = grpc.secure_channel(
+            target, _make_client_credentials(settings), options=channel_options
+        )
+    if audited:
+        tag_channel_target(channel, target)
+    return channel

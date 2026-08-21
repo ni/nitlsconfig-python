@@ -15,6 +15,7 @@ from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
+from nitlsconfig.audit import audit_session_connect
 from nitlsconfig.cli import (
     CertificateLocation,
     ClientCertMode,
@@ -55,6 +56,7 @@ _GRPC_EXPORTS = [
 
 __all__ = [
     "__version__",
+    "audit_session_connect",
     "CertificateLocation",
     "ClientCertMode",
     "ClientConfig",
