@@ -6,19 +6,7 @@ on:
       - main
       - 'releases/**'
   workflow_call:
-    inputs:
-      report_results:
-        description: Publish test and check results.
-        required: false
-        type: boolean
-        default: true
   workflow_dispatch:
-    inputs:
-      report_results:
-        description: Publish test and check results.
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
