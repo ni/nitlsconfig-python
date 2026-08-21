@@ -66,14 +66,25 @@ _TARGET_ATTR = "_nitls_audit_target"
 
 _MAX_FIELD_LENGTH = 256
 
+# The quote is here because messages wrap every field in single quotes; without it
+# a value can close the quote and append text that reads as part of our message.
+_ESCAPES = {"\\": "\\\\", "'": "\\'", "\r": "\\r", "\n": "\\n"}
+
 
 def _audit_field(value: object) -> str:
     """Return a bounded audit field with record-breaking characters escaped.
 
     Escaping runs before the bound, so the returned length is the real limit;
     escaping afterwards could double it.
+
+    Remaining C0 controls and DEL become hex escapes: ESC would otherwise emit
+    terminal control sequences when a syslog file is read, and NUL can truncate
+    the record as it crosses into the platform logging API.
     """
-    escaped = str(value).replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
+    escaped = "".join(
+        _ESCAPES[ch] if ch in _ESCAPES else (ch if " " <= ch != "\x7f" else f"\\x{ord(ch):02x}")
+        for ch in str(value)
+    )
     if len(escaped) <= _MAX_FIELD_LENGTH:
         return escaped
 

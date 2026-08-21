@@ -120,6 +120,29 @@ def test___transport_fields_with_newlines___escape_record_breaking_characters(
     )
 
 
+def test___transport_field_contains_quote___quote_is_escaped(
+    recorded: RecordingHandler,
+) -> None:
+    audit_transport_posture("host' is unencrypted (TLS disabled). '", TransportSecurity.MutualTls)
+
+    assert only_message(recorded) == (
+        "Client transport for service 'ni-grpc-device' to "
+        "'host\\' is unencrypted (TLS disabled). \\'' "
+        "uses mutual TLS. Presenting a client certificate."
+    )
+
+
+def test___transport_field_contains_control_characters___they_become_hex_escapes(
+    recorded: RecordingHandler,
+) -> None:
+    audit_transport_posture("host\x00\x1b\x7f", TransportSecurity.MutualTls)
+
+    assert only_message(recorded) == (
+        "Client transport for service 'ni-grpc-device' to 'host\\x00\\x1b\\x7f' "
+        "uses mutual TLS. Presenting a client certificate."
+    )
+
+
 def test___audit_fields_over_maximum_length___are_truncated(recorded: RecordingHandler) -> None:
     peer_host = "h" * (audit._MAX_FIELD_LENGTH + 10)
 

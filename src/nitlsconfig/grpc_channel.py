@@ -384,7 +384,10 @@ def create_grpc_client_channel(
 
     # Auditing covers the NI gRPC Device Server only, so a channel for any other
     # service goes unaudited rather than being recorded under the wrong service.
-    if service_name == DEFAULT_SERVICE_NAME:
+    # The tag gates the session record the same way this gates the posture record.
+    audited = service_name == DEFAULT_SERVICE_NAME
+
+    if audited:
         audit_transport_posture(server_address, security)
 
     if settings is None:
@@ -393,5 +396,6 @@ def create_grpc_client_channel(
         channel = grpc.secure_channel(
             target, _make_client_credentials(settings), options=channel_options
         )
-    tag_channel_target(channel, target)
+    if audited:
+        tag_channel_target(channel, target)
     return channel
