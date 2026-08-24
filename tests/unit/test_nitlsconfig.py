@@ -262,11 +262,12 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
 
     Every other channel test substitutes a fake config, so this is the only one
     that exercises the seam: enum parsing, CertificateLocation.from_string and
-    the contents lookups all feed create_grpc_client_channel here. A mis-parsed
+    the contents lookups all feed create_grpc_device_channel here. A mis-parsed
     server_mode would silently produce an insecure channel and be invisible
     elsewhere in the suite.
 
-    ni-mqtt is configured for mutual TLS with SystemDefault trust anchors.
+    ni-mqtt is configured for mutual TLS with SystemDefault trust anchors, so the
+    fixture stands in for the service name the factory hardcodes.
     """
     captured: dict[str, object] = {}
     real_ssl_channel_credentials = grpc.ssl_channel_credentials
@@ -276,10 +277,9 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
         return real_ssl_channel_credentials(**kwargs)
 
     monkeypatch.setattr(grpc, "ssl_channel_credentials", spy)
+    monkeypatch.setattr(grpc_channel, "SERVICE_NAME", "ni-mqtt")
 
-    with grpc_channel.create_grpc_client_channel(
-        "localhost", 31763, service_name="ni-mqtt"
-    ) as channel:
+    with grpc_channel.create_grpc_device_channel("localhost", 31763) as channel:
         assert isinstance(channel, grpc.Channel)
 
     # SystemDefault trust anchors must arrive as None, not empty bytes.
@@ -288,7 +288,11 @@ def test_real_config_drives_channel_credentials(monkeypatch: pytest.MonkeyPatch)
     assert b"PRIVATE KEY" in cast(bytes, captured["private_key"])
 
 
-def test_real_config_with_unknown_server_mode_is_rejected() -> None:
-    """ni-test has no server_mode, which must be rejected rather than silently ignored."""
+def test_real_config_with_unknown_server_mode_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ni-test has no server_mode, so TLS stays on and unprovisioned material is rejected."""
+    monkeypatch.setattr(grpc_channel, "SERVICE_NAME", "ni-test")
+
     with pytest.raises(grpc_channel.TlsConfigurationError):
-        grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="ni-test")
+        grpc_channel.create_grpc_device_channel("localhost", 31763)

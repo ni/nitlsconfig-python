@@ -77,7 +77,7 @@ def test_returns_a_usable_grpc_channel(
         lambda service_name, server_address: config,
     )
 
-    with grpc_channel.create_grpc_client_channel("localhost", 31763) as channel:
+    with grpc_channel.create_grpc_device_channel("localhost", 31763) as channel:
         # nimi-python and nidaqmx-python pass this straight to GrpcSessionOptions,
         # which requires a grpc.Channel and calls these factories on it.
         assert isinstance(channel, grpc.Channel)
@@ -109,7 +109,7 @@ def test_channel_options_are_accepted_by_grpc(
     )
     capfd.readouterr()
 
-    with grpc_channel.create_grpc_client_channel(
+    with grpc_channel.create_grpc_device_channel(
         "localhost",
         31763,
         options=[("grpc.max_receive_message_length", 4 * 1024 * 1024)],

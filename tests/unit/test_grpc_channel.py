@@ -72,7 +72,7 @@ def create_channel(
         "ClientConfig",
         lambda service_name, server_address: config,
     )
-    channel = grpc_channel.create_grpc_client_channel("localhost", 31763, **kwargs)
+    channel = grpc_channel.create_grpc_device_channel("localhost", 31763, **kwargs)
     assert isinstance(channel, RecordedChannel)
     return channel
 
@@ -110,7 +110,7 @@ def test_ipv6_addresses_are_bracketed(
         lambda service_name, server_address: FakeClientConfig(),
     )
 
-    channel = grpc_channel.create_grpc_client_channel(server_address, 31763)
+    channel = grpc_channel.create_grpc_device_channel(server_address, 31763)
 
     assert isinstance(channel, RecordedChannel)
     assert channel.target == expected_target
@@ -316,12 +316,13 @@ def test_invalid_configuration_raises(
     )
 
     with pytest.raises(grpc_channel.TlsConfigurationError):
-        grpc_channel.create_grpc_client_channel("localhost", 31763)
+        grpc_channel.create_grpc_device_channel("localhost", 31763)
 
 
-def test_service_name_and_address_are_forwarded(
+def test_configuration_is_read_for_the_grpc_device_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The service name is fixed; only the dialed address varies the lookup."""
     requested: list[tuple[str, str]] = []
 
     def record_client_config(service_name: str, server_address: str) -> FakeClientConfig:
@@ -330,12 +331,12 @@ def test_service_name_and_address_are_forwarded(
 
     monkeypatch.setattr(grpc_channel, "ClientConfig", record_client_config)
 
-    grpc_channel.create_grpc_client_channel("localhost", 31763)
-    grpc_channel.create_grpc_client_channel("localhost", 31763, service_name="other-service")
+    grpc_channel.create_grpc_device_channel("localhost", 31763)
+    grpc_channel.create_grpc_device_channel("remote-host", 31763)
 
     assert requested == [
-        (grpc_channel.DEFAULT_SERVICE_NAME, "localhost"),
-        ("other-service", "localhost"),
+        ("ni-grpc-device", "localhost"),
+        ("ni-grpc-device", "remote-host"),
     ]
 
 

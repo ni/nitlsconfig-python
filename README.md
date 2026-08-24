@@ -22,16 +22,16 @@ The gRPC channel factory additionally needs grpcio, which is an optional extra:
 
 ## Creating a gRPC channel
 
-`create_grpc_client_channel` reads the local NI-TLS client configuration and returns a
-`grpc.Channel` secured accordingly. The `server_address` hostname or address is used to
-select matching target-specific NI-TLS settings. Pass the channel straight to any NI
-gRPC Python API:
+`create_grpc_device_channel` reads the local NI-TLS client configuration for the NI
+gRPC Device Server and returns a `grpc.Channel` secured accordingly. The
+`server_address` hostname or address is used to select matching target-specific NI-TLS
+settings. Pass the channel straight to any NI gRPC Python API:
 
 ```python
 import nidcpower
 import nitlsconfig
 
-with nitlsconfig.create_grpc_client_channel("localhost", 31763) as channel:
+with nitlsconfig.create_grpc_device_channel("localhost", 31763) as channel:
     options = nidcpower.GrpcSessionOptions(channel, "")
     with nidcpower.Session("Dev1", grpc_options=options) as session:
         ...
@@ -44,7 +44,7 @@ channel is owned by the caller - NI driver APIs never close it.
 Retries are opt-in:
 
 ```python
-channel = nitlsconfig.create_grpc_client_channel(
+channel = nitlsconfig.create_grpc_device_channel(
     "localhost", 31763, retry_policy=nitlsconfig.RetryPolicy()
 )
 ```
@@ -52,7 +52,7 @@ channel = nitlsconfig.create_grpc_client_channel(
 `TlsConfigurationError` is raised when TLS is enabled but the configuration is
 unusable. It is always importable, since handling it does not require grpcio.
 
-`create_grpc_client_channel` and `RetryPolicy` do require grpcio; accessing them
+`create_grpc_device_channel` and `RetryPolicy` do require grpcio; accessing them
 without the `grpc` extra installed raises `ImportError` telling you which extra
 to install.
 

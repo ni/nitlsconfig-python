@@ -25,8 +25,8 @@ initialize RPC, and a gRPC channel connects lazily, so the API layer that
 issues that RPC has to call ``audit_session_connect`` itself.
 
 Auditing covers the NI gRPC Device Server only, so the service name is fixed
-here rather than accepted from callers. Should another service ever need audit
-records, this module grows a service parameter again at that point.
+package-wide rather than accepted from callers. Should another service ever need
+audit records, this module grows a service parameter again at that point.
 
 Records report what this package observed, assuming the hosting process is not
 hostile. Nothing here can defend against code in the same process, which can
@@ -41,7 +41,8 @@ import sys
 import threading
 from enum import Enum
 
-_SERVICE_NAME = "ni-grpc-device"
+from nitlsconfig.service import SERVICE_NAME
+
 _ROLE = "Client"
 
 
@@ -119,7 +120,7 @@ def _make_logging_handler() -> logging.Handler:
         if sys.platform == "win32":
             from logging.handlers import NTEventLogHandler
 
-            return NTEventLogHandler(_SERVICE_NAME)
+            return NTEventLogHandler(SERVICE_NAME)
 
         from logging.handlers import SysLogHandler
 
@@ -144,7 +145,7 @@ def _get_audit_logger() -> logging.Logger:
     """
     global _logging_handler_attached
 
-    logger = logging.getLogger(f"nitlsconfig.audit.{_SERVICE_NAME}.{_ROLE}")
+    logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE_NAME}.{_ROLE}")
 
     with _logging_handler_lock:
         if not _logging_handler_attached:
@@ -154,7 +155,7 @@ def _get_audit_logger() -> logging.Logger:
             logger.propagate = False
 
             handler = _make_logging_handler()
-            handler.setFormatter(logging.Formatter(f"[{_SERVICE_NAME}][{_ROLE}] %(message)s"))
+            handler.setFormatter(logging.Formatter(f"[{SERVICE_NAME}][{_ROLE}] %(message)s"))
             logger.addHandler(handler)
             _logging_handler_attached = True
 
@@ -168,7 +169,7 @@ def audit_transport_posture(peer_host: str, security: TransportSecurity) -> None
     """
     try:
         peer_host = _audit_field(peer_host)
-        message = f"Client transport for service '{_SERVICE_NAME}'"
+        message = f"Client transport for service '{SERVICE_NAME}'"
         if peer_host:
             message += f" to '{peer_host}'"
 
