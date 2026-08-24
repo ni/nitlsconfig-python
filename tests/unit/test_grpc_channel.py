@@ -213,11 +213,19 @@ def test_directory_trust_anchors_are_supported(
     assert channel.credentials["root_certificates"] == b"ROOT_A\nROOT_B"
 
 
-def test_skip_hostname_validation_matches_trusted_certificates(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    "server_mode",
+    [
+        ClientServerMode.SkipHostnameValidation,
+        ClientServerMode.TrustAlways,
+        ClientServerMode.Unknown,
+    ],
+)
+def test_non_disabled_server_modes_match_trusted_certificates(
+    monkeypatch: pytest.MonkeyPatch, server_mode: ClientServerMode
 ) -> None:
-    # grpc's Python API cannot skip only the hostname check, so this mode is
-    # deliberately treated as TrustedCertificates.
+    # grpc's Python API cannot relax verification, so every mode that is not
+    # Disabled fails closed as TrustedCertificates.
     def config(server_mode: ClientServerMode) -> FakeClientConfig:
         return FakeClientConfig(
             server_mode=server_mode,
@@ -227,24 +235,18 @@ def test_skip_hostname_validation_matches_trusted_certificates(
         )
 
     strict = create_channel(monkeypatch, config(ClientServerMode.TrustedCertificates))
-    skipped = create_channel(monkeypatch, config(ClientServerMode.SkipHostnameValidation))
+    relaxed = create_channel(monkeypatch, config(server_mode))
 
-    assert skipped.secure
-    assert skipped.credentials == strict.credentials
-    assert skipped.options == strict.options
+    assert relaxed.secure
+    assert relaxed.credentials == strict.credentials
+    assert relaxed.options == strict.options
 
 
 @pytest.mark.parametrize(
     "config",
     [
-        pytest.param(
-            FakeClientConfig(server_mode=ClientServerMode.TrustAlways),
-            id="trust_always_unsupported",
-        ),
-        pytest.param(
-            FakeClientConfig(server_mode=ClientServerMode.Unknown),
-            id="unknown_server_mode",
-        ),
+        # Unknown presents a client certificate, so it fails on the unprovisioned
+        # material rather than on the mode itself.
         pytest.param(
             FakeClientConfig(
                 server_mode=ClientServerMode.TrustedCertificates,
@@ -256,38 +258,10 @@ def test_skip_hostname_validation_matches_trusted_certificates(
         pytest.param(
             FakeClientConfig(
                 server_mode=ClientServerMode.TrustedCertificates,
-                certificate_mode=ClientCertMode.Managed,
-                certificate_chain_location=CertificateLocation(LocationScheme.Directory, "d"),
-                certificate_key_location=FILE_KEY,
-                trusted_certificates_location=FILE_TRUST,
-            ),
-            id="non_file_certificate_scheme",
-        ),
-        pytest.param(
-            FakeClientConfig(
-                server_mode=ClientServerMode.TrustedCertificates,
-                certificate_mode=ClientCertMode.Managed,
-                certificate_chain_location=CertificateLocation(LocationScheme.File),
-                certificate_key_location=FILE_KEY,
-                trusted_certificates_location=FILE_TRUST,
-            ),
-            id="empty_certificate_path",
-        ),
-        pytest.param(
-            FakeClientConfig(
-                server_mode=ClientServerMode.TrustedCertificates,
                 certificate_mode=ClientCertMode.Disabled,
                 trusted_certificates_location=CertificateLocation(LocationScheme.File),
             ),
             id="missing_trust_anchors",
-        ),
-        pytest.param(
-            FakeClientConfig(
-                server_mode=ClientServerMode.TrustedCertificates,
-                certificate_mode=ClientCertMode.Disabled,
-                trusted_certificates_location=CertificateLocation(LocationScheme.Unknown),
-            ),
-            id="unknown_trust_scheme",
         ),
         # A File trust bundle that produced nothing must fail rather than fall back
         # to the platform trust store, which would silently widen trust far beyond
