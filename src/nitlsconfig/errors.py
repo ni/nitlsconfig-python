@@ -19,6 +19,10 @@ class CommandFailedError(NitlsconfigCliError):
     """Raised when nitlsconfig exits with a non-zero return code."""
 
 
+class CommandTimeoutError(NitlsconfigCliError):
+    """Raised when nitlsconfig does not exit within the allotted time."""
+
+
 class InvalidOutputError(NitlsconfigCliError):
     """Raised when command output cannot be parsed as expected."""
 
@@ -27,7 +31,8 @@ class TlsConfigurationError(NitlsconfigError):
     """Raised when the NI-TLS configuration was read successfully but is invalid.
 
     Deliberately not a :class:`NitlsconfigCliError`: the CLI worked, and the fix
-    is to provision this machine rather than to repair the installation.
+    is to provision or try again to provision this machine rather than to install
+    or repair installation.
     """
 
     #: Static message text, matching the wording used elsewhere in the product. Call

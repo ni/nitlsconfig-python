@@ -30,6 +30,7 @@ from nitlsconfig.cli import (
 )
 from nitlsconfig.errors import (
     CommandFailedError,
+    CommandTimeoutError,
     ExecutableNotFoundError,
     InvalidOutputError,
     NitlsconfigCliError,
@@ -71,6 +72,7 @@ __all__ = [
     "NitlsconfigCliError",
     "ExecutableNotFoundError",
     "CommandFailedError",
+    "CommandTimeoutError",
     "InvalidOutputError",
     "TlsConfigurationError",
     "TrustedCertificateData",
