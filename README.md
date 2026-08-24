@@ -50,8 +50,11 @@ channel = nitlsconfig.create_grpc_client_channel(
 ```
 
 `TlsConfigurationError` is raised when TLS is enabled but the configuration is
-unusable. Accessing any of these names without the `grpc` extra installed raises
-`ImportError` telling you which extra to install.
+unusable. It is always importable, since handling it does not require grpcio.
+
+`create_grpc_client_channel` and `RetryPolicy` do require grpcio; accessing them
+without the `grpc` extra installed raises `ImportError` telling you which extra
+to install.
 
 ## Reading configurations
 ```python

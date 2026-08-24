@@ -3,6 +3,7 @@
 import json
 import pathlib
 import platform
+import subprocess
 from typing import cast, Mapping, Optional, TypedDict
 
 import grpc
@@ -15,6 +16,9 @@ from nitlsconfig import grpc_channel
 TEST_DIR = pathlib.Path(__file__).resolve().parents[0]
 CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
 SERVER_FIXTURE_PATH = TEST_DIR / "nitlsconfig_server.json"
+
+# Captured before the autouse fixture below replaces it with a fixture-backed fake.
+REAL_RUN_NITLSCONFIG_COMMAND = nitlsconfig_cli.run_nitlsconfig_command
 
 
 class NitlsconfigJsonFixtures(TypedDict):
@@ -99,6 +103,22 @@ def mock_nitlsconfig_command(
         "run_nitlsconfig_command",
         fake_run_nitlsconfig_command,
     )
+
+
+def test_command_timeout_is_reported_as_a_package_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung CLI must surface through the package base class, not as a subprocess error."""
+
+    def fake_run(*args: object, **kwargs: object) -> object:
+        raise subprocess.TimeoutExpired(cmd="nitlsconfig", timeout=30)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(nitlsconfig.NitlsconfigError) as excinfo:
+        REAL_RUN_NITLSCONFIG_COMMAND(nitlsconfig_cli.build_list_command("client"))
+
+    assert isinstance(excinfo.value, nitlsconfig.CommandTimeoutError)
 
 
 def test_list_client() -> None:

@@ -10,6 +10,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional, Tuple, TypeVar
 
+from nitlsconfig.errors import (
+    CommandFailedError,
+    CommandTimeoutError,
+    ExecutableNotFoundError,
+    InvalidOutputError,
+    NitlsconfigCliError,
+)
+
 ALLOWED_SCOPES: Tuple[str, ...] = ("client", "server")
 
 # Expected JSON root keys from nitlsconfig output.
@@ -79,22 +87,6 @@ SERVER_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "raw",
     "trusted_certificate_contents",
 )
-
-
-class NitlsconfigCliError(RuntimeError):
-    """Base error for nitlsconfig command invocation failures."""
-
-
-class ExecutableNotFoundError(NitlsconfigCliError):
-    """Raised when a usable nitlsconfig executable cannot be found."""
-
-
-class CommandFailedError(NitlsconfigCliError):
-    """Raised when nitlsconfig exits with a non-zero return code."""
-
-
-class InvalidOutputError(NitlsconfigCliError):
-    """Raised when command output cannot be parsed as expected."""
 
 
 class ServerCertMode(str, Enum):
@@ -319,6 +311,7 @@ def run_nitlsconfig_command(
     """
     executable = "nitlsconfig"
     argv = [executable, *command_args]
+    timeout_seconds = 30
 
     try:
         completed = subprocess.run(
@@ -326,11 +319,16 @@ def run_nitlsconfig_command(
             capture_output=True,
             text=True,
             check=False,
-            timeout=30,
+            timeout=timeout_seconds,
         )  # nosec B603 - argv is passed shell-free and executable selection is controlled
     except FileNotFoundError as ex:
         raise ExecutableNotFoundError(
-            "Unable to find nitlsconfig executable. " f"Tried {executable!r}."
+            f"Could not find an installation of {executable}. Please ensure that {executable} "
+            "is installed on this machine or contact National Instruments for support."
+        ) from ex
+    except subprocess.TimeoutExpired as ex:
+        raise CommandTimeoutError(
+            f"nitlsconfig command timed out after {timeout_seconds} seconds: {' '.join(argv)}."
         ) from ex
 
     if completed.returncode != 0:

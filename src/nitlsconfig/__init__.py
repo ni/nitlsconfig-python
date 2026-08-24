@@ -21,16 +21,21 @@ from nitlsconfig.cli import (
     ClientCertMode,
     ClientConfig,
     ClientServerMode,
-    CommandFailedError,
-    ExecutableNotFoundError,
-    InvalidOutputError,
     LocationScheme,
-    NitlsconfigCliError,
     ServerCertMode,
     ServerClientMode,
     ServerConfig,
     TrustedCertificateData,
     KnownServerData,
+)
+from nitlsconfig.errors import (
+    CommandFailedError,
+    CommandTimeoutError,
+    ExecutableNotFoundError,
+    InvalidOutputError,
+    NitlsconfigCliError,
+    NitlsconfigError,
+    TlsConfigurationError,
 )
 
 if TYPE_CHECKING:
@@ -38,7 +43,6 @@ if TYPE_CHECKING:
     from nitlsconfig.grpc_channel import (
         DEFAULT_SERVICE_NAME,
         RetryPolicy,
-        TlsConfigurationError,
         create_grpc_client_channel,
     )
 
@@ -50,7 +54,6 @@ __version__ = version("nitlsconfig")
 _GRPC_EXPORTS = [
     "DEFAULT_SERVICE_NAME",
     "RetryPolicy",
-    "TlsConfigurationError",
     "create_grpc_client_channel",
 ]
 
@@ -65,10 +68,13 @@ __all__ = [
     "ServerCertMode",
     "ServerClientMode",
     "ServerConfig",
+    "NitlsconfigError",
     "NitlsconfigCliError",
     "ExecutableNotFoundError",
     "CommandFailedError",
+    "CommandTimeoutError",
     "InvalidOutputError",
+    "TlsConfigurationError",
     "TrustedCertificateData",
     "KnownServerData",
 ]

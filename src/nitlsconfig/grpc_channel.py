@@ -21,17 +21,14 @@ manager, so ``with create_grpc_client_channel(...) as channel:`` works as expect
 The name carries the ``grpc`` prefix because this package also re-exports the
 factory from its root, alongside any potential future non-gRPC transports.
 
-A client ``server_mode`` of ``TrustAlways`` is not currently supported and raises
-:class:`TlsConfigurationError`.
-
-A client ``server_mode`` of ``SkipHostnameValidation`` is treated exactly like
-``TrustedCertificates``: the server certificate chain is verified *and* the
-hostname is checked. gRPC's Python API exposes no way to skip only the hostname
-check: doing so requires a custom certificate verifier, which grpcio does not
-bind in Python, where the TLS surface is limited to
-``grpc.ssl_channel_credentials``. Verifying when asked not to fails closed, so
-this is safe, but a caller who sets the mode gets no relaxation of the hostname
-check.
+``server_mode`` Disabled selects a plain connection. Every other mode is treated
+exactly like ``TrustedCertificates``: the server certificate chain is verified
+*and* the hostname is checked. gRPC's Python API cannot relax either check
+independently, since that requires a custom certificate verifier which grpcio
+does not bind in Python, where the TLS surface is limited to
+``grpc.ssl_channel_credentials``. Verifying when asked not to fails closed, so a
+caller who sets ``TrustAlways`` or ``SkipHostnameValidation`` gets a stricter
+connection than requested rather than a weaker one.
 
 When the server certificate's CN/SAN does not match the dialed host, pass
 ``grpc.ssl_target_name_override`` via ``options`` instead. That substitutes the
@@ -52,13 +49,12 @@ from nitlsconfig.audit import (
     tag_channel_target,
 )
 from nitlsconfig.cli import (
-    CertificateLocation,
     ClientCertMode,
     ClientConfig,
     ClientServerMode,
     LocationScheme,
-    NitlsconfigCliError,
 )
+from nitlsconfig.errors import TlsConfigurationError
 
 __all__ = [
     "DEFAULT_SERVICE_NAME",
@@ -89,19 +85,6 @@ def _format_target(server_address: str, server_port: int) -> str:
     if ":" in server_address and not server_address.startswith("["):
         return f"[{server_address}]:{server_port}"
     return f"{server_address}:{server_port}"
-
-
-class TlsConfigurationError(NitlsconfigCliError):
-    """Raised when the NI-TLS configuration was read successfully but is invalid."""
-
-    #: Shared remedy text appended to messages whose fix is to provision
-    #: certificates. Kept in one place so the guidance stays consistent with the
-    #: wording used elsewhere in the product.
-    _REMEDY = (
-        "Use NI Hardware Manager to verify that certificates are configured and "
-        "matching on both the host and remote target. Check that the remote target "
-        "has a compatible TLS enabled configuration with the host."
-    )
 
 
 @dataclass(frozen=True)
@@ -201,39 +184,19 @@ def _apply_retry_policy(
     return channel_options
 
 
-def _require_file_scheme(
-    location: CertificateLocation, description: str, service_name: str
-) -> None:
-    """Validate that a certificate or key location is a usable File:// path.
-
-    The ni-grpc-device client capabilities declare support for the File scheme
-    only, so any other scheme is rejected rather than silently ignored.
-    """
-    if location.scheme != LocationScheme.File:
-        raise TlsConfigurationError(
-            f"Client {description} must use the File scheme for service "
-            f"{service_name!r}, got {location.scheme.value!r}."
-        )
-    if not location.path:
-        raise TlsConfigurationError(
-            f"TLS is enabled but the client {description} path is missing for "
-            f"service {service_name!r}."
-        )
-
-
 def _require_contents(contents: str, description: str, service_name: str) -> str:
     """Validate that configured certificate material is actually present.
 
     Empty contents mean the material could not be produced (missing, unreadable,
-    or not yet provisioned), never that the client opted out. Opting out is
-    expressed by the configuration itself: ``certificate_mode`` Disabled for the
-    client identity, and the SystemDefault scheme for trust anchors. Neither
-    reaches this check.
+    not yet provisioned, or named by a scheme nitlsconfig cannot resolve), never
+    that the client opted out. Opting out is expressed by the configuration
+    itself: ``certificate_mode`` Disabled for the client identity, and the
+    SystemDefault scheme for trust anchors. Neither reaches this check.
     """
     if not contents:
         raise TlsConfigurationError(
-            f"TLS is configured for service {service_name!r} but the client "
-            f"{description} is missing on this system. {TlsConfigurationError._REMEDY}"
+            f"{TlsConfigurationError._MESSAGE} The client {description} is missing on this "
+            f"system for service {service_name!r}."
         )
     return contents
 
@@ -246,30 +209,20 @@ def _load_client_tls_settings(config: ClientConfig) -> Optional[_ClientTlsSettin
     """
     service_name = config.service_name
 
-    server_mode = config.server_mode
-    if server_mode == ClientServerMode.Disabled:
+    # Disabled is the only mode that turns TLS off. TrustAlways, SkipHostnameValidation,
+    # and Unknown all fall through to full chain and hostname verification: relaxing
+    # either check is a policy decision for NI-TLS, so this defaults to secure.
+    if config.server_mode == ClientServerMode.Disabled:
         return None
-    if server_mode == ClientServerMode.TrustAlways:
-        # ni-grpc-device.client.caps.yml declares supports_server_mode_trust_always: false,
-        # so this mode is not offered for this service.
-        raise TlsConfigurationError(
-            f"Client server_mode TrustAlways is not supported for service {service_name!r}."
-        )
-    if server_mode == ClientServerMode.Unknown:
-        raise TlsConfigurationError(f"Unsupported client server_mode for service {service_name!r}.")
 
-    # certificate_mode only decides mTLS versus one-way TLS.
-    if config.certificate_mode == ClientCertMode.Unknown:
-        raise TlsConfigurationError(
-            f"Unsupported client certificate_mode for service {service_name!r}."
-        )
+    # certificate_mode only decides mTLS versus one-way TLS. Disabled is the only mode
+    # that skips the client certificate, so Unknown presents one and fails closed if
+    # the material is not provisioned.
     present_client_cert = config.certificate_mode != ClientCertMode.Disabled
 
     certificate_chain_contents = ""
     private_key_contents = ""
     if present_client_cert:
-        _require_file_scheme(config.certificate_chain_location, "certificate chain", service_name)
-        _require_file_scheme(config.certificate_key_location, "certificate key", service_name)
         certificate_chain_contents = _require_contents(
             config.certificate_chain_contents, "certificate chain", service_name
         )
@@ -279,20 +232,13 @@ def _load_client_tls_settings(config: ClientConfig) -> Optional[_ClientTlsSettin
 
     # Trust anchors are always required: the client must verify the server.
     # SystemDefault means "use the platform certificate store" and carries no
-    # contents. Every other usable scheme (File, Directory) is resolved by
-    # nitlsconfig into a single PEM bundle, so the scheme itself does not need
-    # to be special-cased here; only Unknown is rejected.
+    # contents. Every other scheme names specific anchors that nitlsconfig
+    # resolves into a single PEM bundle, so the contents check below covers an
+    # unrecognized scheme without rejecting one this version has yet to learn.
     trusted_location = config.trusted_certificates_location
-    if trusted_location.scheme == LocationScheme.Unknown:
-        raise TlsConfigurationError(
-            f"TLS is configured for service {service_name!r} but the client trusted "
-            f"certificates location is missing or unrecognized. {TlsConfigurationError._REMEDY}"
-        )
 
     trusted_contents = ""
     if trusted_location.scheme != LocationScheme.SystemDefault:
-        # Any scheme other than SystemDefault names specific anchors, so they
-        # must actually be present.
         trusted_contents = _require_contents(
             config.trusted_certificates_contents, "trusted certificate bundle", service_name
         )
