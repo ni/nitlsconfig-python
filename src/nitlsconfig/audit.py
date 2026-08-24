@@ -41,6 +41,7 @@ import sys
 import threading
 from enum import Enum
 
+from nitlsconfig.channel_tag import get_channel_target
 from nitlsconfig.service import SERVICE_NAME
 
 _ROLE = "Client"
@@ -59,11 +60,6 @@ class TransportSecurity(Enum):
 # a logging handler and double every record.
 _logging_handler_lock = threading.Lock()
 _logging_handler_attached = False
-
-# Set on channels we create. Carries the address audit_session_connect reports, and
-# marks the channel as ours: the API layer issuing the initialize RPC holds only the
-# channel, and cannot otherwise tell whether NI-TLS had any part in building it.
-_TARGET_ATTR = "_nitls_audit_target"
 
 _MAX_FIELD_LENGTH = 256
 
@@ -95,17 +91,6 @@ def _audit_field(value: object) -> str:
     if (len(truncated) - len(truncated.rstrip("\\"))) % 2:
         truncated = truncated[:-1]
     return truncated + "..."
-
-
-def tag_channel_target(channel: object, target: str) -> None:
-    """Record on a channel the ``host:port`` it was created for. Never raises."""
-    try:
-        setattr(channel, _TARGET_ATTR, target)
-    except Exception:
-        logging.getLogger(__name__).debug(
-            "Unable to tag channel for audit logging; the channel will go unaudited.",
-            exc_info=True,
-        )
 
 
 def _make_logging_handler() -> logging.Handler:
@@ -203,7 +188,7 @@ def audit_session_connect(driver_name: str, channel: object, connected: bool) ->
     source on machines not using NI-TLS at all.
     """
     try:
-        target = getattr(channel, _TARGET_ATTR, "")
+        target = get_channel_target(channel)
         if not target:
             return
 
