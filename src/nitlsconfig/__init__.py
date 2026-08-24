@@ -41,9 +41,8 @@ from nitlsconfig.errors import (
 if TYPE_CHECKING:
     # Imported eagerly for type checkers and editors, which do not run __getattr__.
     from nitlsconfig.grpc_channel import (
-        DEFAULT_SERVICE_NAME,
         RetryPolicy,
-        create_grpc_client_channel,
+        create_grpc_device_channel,
     )
 
 __version__ = version("nitlsconfig")
@@ -52,9 +51,8 @@ __version__ = version("nitlsconfig")
 # A plain list literal, because pyright only tracks __all__ through a small set
 # of literal forms; anything computed makes it give up on the export list.
 _GRPC_EXPORTS = [
-    "DEFAULT_SERVICE_NAME",
     "RetryPolicy",
-    "create_grpc_client_channel",
+    "create_grpc_device_channel",
 ]
 
 __all__ = [

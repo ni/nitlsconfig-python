@@ -1,25 +1,26 @@
-"""Create gRPC client channels from NI-TLS (nitlsconfig) client configuration.
+"""Create gRPC channels to the NI gRPC Device Server from NI-TLS (nitlsconfig) configuration.
 
-Reads the local NI-TLS client configuration for a service and produces a
-:class:`grpc.Channel` that is either secured with TLS/mTLS or, when TLS is not
-configured, a plain insecure channel.
+Reads the local NI-TLS client configuration for the NI gRPC Device Server and
+produces a :class:`grpc.Channel` that is either secured with TLS/mTLS or, when
+TLS is not configured, a plain insecure channel.
 
 The resulting channel is a normal ``grpc.Channel``. It can be handed directly to
 any NI gRPC Python API, for example::
 
-    from nitlsconfig.grpc_channel import create_grpc_client_channel
+    from nitlsconfig.grpc_channel import create_grpc_device_channel
 
-    channel = create_grpc_client_channel("localhost", 31763)
+    channel = create_grpc_device_channel("localhost", 31763)
     options = nidcpower.GrpcSessionOptions(channel, "")
     with nidcpower.Session("Dev1", grpc_options=options) as session:
         ...
 
 Channel ownership stays with the caller, matching the NI Python driver APIs,
 which never close the channel themselves. ``grpc.Channel`` is already a context
-manager, so ``with create_grpc_client_channel(...) as channel:`` works as expected.
+manager, so ``with create_grpc_device_channel(...) as channel:`` works as expected.
 
-The name carries the ``grpc`` prefix because this package also re-exports the
-factory from its root, alongside any potential future non-gRPC transports.
+The NI gRPC Device Server is the only service this factory builds channels for.
+Other services can still be read through :class:`~nitlsconfig.cli.ClientConfig`;
+a configurable service name can be added later without breaking this signature.
 
 ``server_mode`` Disabled selects a plain connection. Every other mode is treated
 exactly like ``TrustedCertificates``: the server certificate chain is verified
@@ -55,18 +56,13 @@ from nitlsconfig.cli import (
     LocationScheme,
 )
 from nitlsconfig.errors import TlsConfigurationError
+from nitlsconfig.service import SERVICE_NAME
 
 __all__ = [
-    "DEFAULT_SERVICE_NAME",
     "RetryPolicy",
     "TlsConfigurationError",
-    "create_grpc_client_channel",
+    "create_grpc_device_channel",
 ]
-
-# The nitlsconfig service name registered by the NI gRPC Device Server. It is
-# the file stem of ni-grpc-device.client.caps.yml, which grpc-device installs
-# into the nitlsconfig client.d directory.
-DEFAULT_SERVICE_NAME = "ni-grpc-device"
 
 # gRPC channel argument that carries a service config JSON document.
 _SERVICE_CONFIG_ARG = "grpc.service_config"
@@ -277,17 +273,16 @@ def _make_client_credentials(settings: _ClientTlsSettings) -> grpc.ChannelCreden
     )
 
 
-def create_grpc_client_channel(
+def create_grpc_device_channel(
     server_address: str,
     server_port: int,
-    service_name: str = DEFAULT_SERVICE_NAME,
     options: ChannelOptions = (),
     retry_policy: Optional[RetryPolicy] = None,
 ) -> grpc.Channel:
     """Create a gRPC channel to ``server_address:server_port`` using NI-TLS configuration.
 
-    Reads the NI-TLS client configuration for ``service_name`` and builds a
-    channel that verifies the server certificate and, when the configuration
+    Reads the NI-TLS client configuration for the NI gRPC Device Server and builds
+    a channel that verifies the server certificate and, when the configuration
     calls for mutual TLS, also presents the client certificate. Falls back to an
     insecure channel when the client's ``server_mode`` is Disabled, which is the
     default until the machine is configured.
@@ -297,7 +292,6 @@ def create_grpc_client_channel(
             to resolve NI-TLS settings specific to this target. IPv6 literals may be
             passed with or without brackets.
         server_port: Port of the NI gRPC Device Server.
-        service_name: nitlsconfig service name to read configuration from.
         options: gRPC channel arguments, as ``(key, value)`` pairs. Use this to
             tune the channel, for example to raise message size limits or to set
             ``grpc.ssl_target_name_override`` when the server certificate's
@@ -319,7 +313,7 @@ def create_grpc_client_channel(
     target = _format_target(server_address, server_port)
     channel_options = _apply_retry_policy(options, retry_policy)
 
-    settings = _load_client_tls_settings(ClientConfig(service_name, server_address))
+    settings = _load_client_tls_settings(ClientConfig(SERVICE_NAME, server_address))
 
     if settings is None:
         security = TransportSecurity.Unencrypted
@@ -328,13 +322,7 @@ def create_grpc_client_channel(
     else:
         security = TransportSecurity.ServerAuthenticatedTls
 
-    # Auditing covers the NI gRPC Device Server only, so a channel for any other
-    # service goes unaudited rather than being recorded under the wrong service.
-    # The tag gates the session record the same way this gates the posture record.
-    audited = service_name == DEFAULT_SERVICE_NAME
-
-    if audited:
-        audit_transport_posture(server_address, security)
+    audit_transport_posture(server_address, security)
 
     if settings is None:
         channel = grpc.insecure_channel(target, options=channel_options)
@@ -342,6 +330,5 @@ def create_grpc_client_channel(
         channel = grpc.secure_channel(
             target, _make_client_credentials(settings), options=channel_options
         )
-    if audited:
-        tag_channel_target(channel, target)
+    tag_channel_target(channel, target)
     return channel

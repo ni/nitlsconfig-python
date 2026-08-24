@@ -132,7 +132,7 @@ def test_mutual_tls_handshake_succeeds(
         lambda service_name, server_address: config,
     )
 
-    with grpc_channel.create_grpc_client_channel("localhost", trusted_server) as channel:
+    with grpc_channel.create_grpc_device_channel("localhost", trusted_server) as channel:
         say = channel.unary_unary(
             _METHOD, request_serializer=_identity, response_deserializer=_identity
         )
@@ -157,7 +157,7 @@ def test_server_from_untrusted_ca_is_rejected(
         lambda service_name, server_address: config,
     )
 
-    with grpc_channel.create_grpc_client_channel("localhost", untrusted_server) as channel:
+    with grpc_channel.create_grpc_device_channel("localhost", untrusted_server) as channel:
         say = channel.unary_unary(
             _METHOD, request_serializer=_identity, response_deserializer=_identity
         )
