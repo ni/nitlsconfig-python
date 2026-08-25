@@ -1,11 +1,16 @@
 name: Report test results
 
 on:
-  workflow_call:
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["PR","CI"]
+    types: [completed]
+
+permissions:
+  contents: read
 
 jobs:
   report_test_results:
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
     name: Report test results
     runs-on: ubuntu-latest
     permissions:
@@ -21,6 +26,8 @@ jobs:
           path: test_results
           pattern: test_results_*
           merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: List downloaded files
         run: ls -lR
       - name: Publish test results

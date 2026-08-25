@@ -8,6 +8,9 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   check_python_module:
     name: Check python module
@@ -25,12 +28,3 @@ jobs:
     name: Run unit tests
     uses: ./.github/workflows/run_unit_tests.yml
     needs: [checks_succeeded]
-  report_test_results:
-    name: Report test results
-    uses: ./.github/workflows/report_test_results.yml
-    needs: [run_unit_tests]
-    if: always()
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
