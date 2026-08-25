@@ -14,6 +14,7 @@ from fake_config import (
 )
 
 from nitlsconfig import grpc_channel
+from nitlsconfig.channel_tag import is_nitls_channel
 from nitlsconfig.cli import (
     CertificateLocation,
     ClientCertMode,
@@ -175,6 +176,26 @@ def test_mutual_tls_credentials(
         "private_key": b"KEY",
         "certificate_chain": b"CERT",
     }
+
+
+def test_created_channels_are_tagged_as_ours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Tagging is what lets a driver API elaborate on a later connection failure.
+    # Plaintext counts too: a client expecting plaintext cannot reach a TLS target.
+    tls = create_channel(
+        monkeypatch,
+        FakeClientConfig(
+            server_mode=ClientServerMode.TrustedCertificates,
+            certificate_mode=ClientCertMode.Disabled,
+            trusted_certificates_location=FILE_TRUST,
+            trusted_certificates_contents="ROOT",
+        ),
+    )
+    plaintext = create_channel(monkeypatch, FakeClientConfig())
+
+    assert is_nitls_channel(tls)
+    assert is_nitls_channel(plaintext)
 
 
 def test_one_way_tls_credentials(

@@ -36,6 +36,7 @@ from nitlsconfig.errors import (
     NitlsconfigCliError,
     NitlsconfigError,
     TlsConfigurationError,
+    get_tls_connection_error_elaboration,
 )
 
 if TYPE_CHECKING:
@@ -75,6 +76,7 @@ __all__ = [
     "TlsConfigurationError",
     "TrustedCertificateData",
     "KnownServerData",
+    "get_tls_connection_error_elaboration",
 ]
 
 # The gRPC names are public API, but only on an install that can supply them.

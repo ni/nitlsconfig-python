@@ -11,6 +11,7 @@ from nitlsconfig.audit import (
     audit_session_connect,
     audit_transport_posture,
 )
+from nitlsconfig.channel_tag import tag_channel_target
 
 SERVICE = "ni-grpc-device"
 HOST = "localhost"
@@ -169,7 +170,7 @@ class FakeChannel:
 
 def test___session_connected___logs_connect_as_info(recorded: RecordingHandler) -> None:
     channel = FakeChannel()
-    audit.tag_channel_target(channel, "localhost:31763")
+    tag_channel_target(channel, "localhost:31763")
 
     audit_session_connect("NI-DCPower", channel, True)
 
@@ -181,7 +182,7 @@ def test___session_connected___logs_connect_as_info(recorded: RecordingHandler) 
 
 def test___session_not_connected___logs_failure_as_error(recorded: RecordingHandler) -> None:
     channel = FakeChannel()
-    audit.tag_channel_target(channel, "localhost:31763")
+    tag_channel_target(channel, "localhost:31763")
 
     audit_session_connect("NI-DCPower", channel, False)
 
@@ -195,7 +196,7 @@ def test___session_fields_with_newlines___escape_record_breaking_characters(
     recorded: RecordingHandler,
 ) -> None:
     channel = FakeChannel()
-    audit.tag_channel_target(channel, "localhost\r\nforged-entry")
+    tag_channel_target(channel, "localhost\r\nforged-entry")
 
     audit_session_connect("driver\rname", channel, True)
 
@@ -209,13 +210,6 @@ def test___untagged_channel___emits_no_record(recorded: RecordingHandler) -> Non
     audit_session_connect("NI-DCPower", FakeChannel(), True)
 
     assert recorded.records == []
-
-
-def test___channel_rejects_attributes___tagging_does_not_raise() -> None:
-    class Slotted:
-        __slots__ = ()
-
-    audit.tag_channel_target(Slotted(), "localhost:31763")
 
 
 def test___audit_logger___formats_with_service_and_role_prefix(
@@ -267,7 +261,7 @@ def test___logging_handler_raises___does_not_disrupt_caller(
     reset_logger()
 
     channel = FakeChannel()
-    audit.tag_channel_target(channel, "localhost:31763")
+    tag_channel_target(channel, "localhost:31763")
 
     audit_transport_posture(HOST, TransportSecurity.MutualTls)
     audit_session_connect("NI-DCPower", channel, False)

@@ -22,6 +22,10 @@ The NI gRPC Device Server is the only service this factory builds channels for.
 Other services can still be read through :class:`~nitlsconfig.cli.ClientConfig`;
 a configurable service name can be added later without breaking this signature.
 
+:func:`~nitlsconfig.errors.get_tls_connection_error_elaboration` recognizes a
+channel built here, so a driver API can tell the caller that a failure to connect
+may be TLS-related, which gRPC's status codes cannot express on their own.
+
 ``server_mode`` Disabled selects a plain connection. Every other mode is treated
 exactly like ``TrustedCertificates``: the server certificate chain is verified
 *and* the hostname is checked. gRPC's Python API cannot relax either check
@@ -47,8 +51,8 @@ import grpc
 from nitlsconfig.audit import (
     TransportSecurity,
     audit_transport_posture,
-    tag_channel_target,
 )
+from nitlsconfig.channel_tag import tag_channel_target
 from nitlsconfig.cli import (
     ClientCertMode,
     ClientConfig,
