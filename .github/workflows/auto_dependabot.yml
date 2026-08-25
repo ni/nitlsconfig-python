@@ -1,0 +1,28 @@
+name: Auto Actions for Dependabot
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  auto_approve_merge:
+    # Job level permissions are required to approve and merge PRs
+    permissions:
+      pull-requests: write
+      contents: write
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Auto approve
+        run: gh pr review "$PR_URL" --approve --body "Auto approved by Dependabot"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Automerge
+        run: gh pr merge "$PR_URL" --squash --auto
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
