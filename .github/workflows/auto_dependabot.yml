@@ -15,20 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
-      - name: Dependabot metadata
-        id: dependabot
-        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Auto approve
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        run: gh pr review ${{ github.event.pull_request.number }} --approve --body "Auto approved by Dependabot"
+        run: gh pr review "$PR_URL" --approve --body "Auto approved by Dependabot"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Automerge
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        run: gh pr merge ${{ github.event.pull_request.number }} --squash --auto
+        run: gh pr merge "$PR_URL" --squash --auto
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
