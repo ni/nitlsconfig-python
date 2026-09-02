@@ -1,37 +1,12 @@
-"""Audit logging for NI-TLS client transports.
+"""Audit logging for NI TLS client transports.
 
-Writes to the platform audit log similarly to other NI gRPC clients:
+Records the security posture of transports this package creates, and the outcome of a
+driver's gRPC session initialize RPC, to the platform audit log: the Windows Event Log
+on Windows, syslog on Linux.
 
-Windows: Windows Event Log
-Linux: syslog
-
-We use the record pattern ``[<service>][<role>] <message>``.
-
-A record is emitted only for something that attests to the security posture of a
-connection that actually existed: transport posture and session connect results.
-
-Configuration errors are not audited, because no channel is created and nothing
-is transmitted; :class:`TlsConfigurationError` carries that detail to the caller
-directly.
-
-We also do not record *which* server we authenticated, for example its
-certificate subject. gRPC's Python client API takes certificates as input only:
-it offers no callback during the handshake and no way to read the server's
-certificate afterward.
-
-Transport posture is emitted by the channel factory.
-The session connect record cannot be: it reports the outcome of a driver's
-initialize RPC, and a gRPC channel connects lazily, so the API layer that
-issues that RPC has to call ``audit_session_connect`` itself.
-
-Auditing covers the NI gRPC Device Server only, so the service name is fixed
-package-wide rather than accepted from callers. Should another service ever need
-audit records, this module grows a service parameter again at that point.
-
-Records report what this package observed, assuming the hosting process is not
-hostile. Nothing here can defend against code in the same process, which can
-call the standard library logger directly. Untrusted *values* reaching a record
-are bounded and escaped below, because those do cross a trust boundary.
+Transport posture is recorded by the channel factory. The session connect outcome
+cannot be, because a gRPC channel connects lazily, so the driver API layer that issues
+the initialize RPC calls :func:`audit_session_connect` itself.
 """
 
 from __future__ import annotations
@@ -41,13 +16,30 @@ import sys
 import threading
 from enum import Enum
 
+from nitlsconfig._service import SERVICE_NAME
 from nitlsconfig.channel_tag import get_channel_target
-from nitlsconfig.service import SERVICE_NAME
+
+# A record is emitted only for something that attests to the security posture of a
+# connection that actually existed. Configuration errors are not audited, because no
+# channel is created and nothing is transmitted; TlsConfigurationError carries that
+# detail to the caller directly. We also do not record *which* server we authenticated,
+# for example its certificate subject: gRPC's Python client API takes certificates as
+# input only, offering no handshake callback and no way to read the server's certificate
+# afterward.
+#
+# Auditing covers the NI gRPC Device Server only, so the service name is fixed
+# package-wide rather than accepted from callers. Should another service ever need audit
+# records, this module grows a service parameter again at that point.
+#
+# Records report what this package observed, assuming the hosting process is not hostile.
+# Nothing here can defend against code in the same process, which can call the standard
+# library logger directly. Untrusted *values* reaching a record are bounded and escaped
+# below, because those do cross a trust boundary.
 
 _ROLE = "Client"
 
 
-class TransportSecurity(Enum):
+class _TransportSecurity(Enum):
     """Security posture of a created transport."""
 
     Unencrypted = "unencrypted"
@@ -114,7 +106,7 @@ def _make_logging_handler() -> logging.Handler:
         # The platform logging handler failed, not `logging` itself; this diagnostic
         # goes to the host application's ordinary logger, never to the audit channel.
         logging.getLogger(__name__).warning(
-            "NI-TLS audit logging is unavailable on this system; audit events "
+            "NI TLS audit logging is unavailable on this system; audit events "
             "will not be recorded.",
             exc_info=True,
         )
@@ -140,6 +132,7 @@ def _get_audit_logger() -> logging.Logger:
             logger.propagate = False
 
             handler = _make_logging_handler()
+            # Record pattern: [<service>][<role>] <message>
             handler.setFormatter(logging.Formatter(f"[{SERVICE_NAME}][{_ROLE}] %(message)s"))
             logger.addHandler(handler)
             _logging_handler_attached = True
@@ -147,7 +140,7 @@ def _get_audit_logger() -> logging.Logger:
     return logger
 
 
-def audit_transport_posture(peer_host: str, security: TransportSecurity) -> None:
+def _audit_transport_posture(peer_host: str, security: _TransportSecurity) -> None:
     """Record the security posture of a client transport.
 
     Never raises: auditing must not disrupt transport creation.
@@ -158,16 +151,16 @@ def audit_transport_posture(peer_host: str, security: TransportSecurity) -> None
         if peer_host:
             message += f" to '{peer_host}'"
 
-        if security is TransportSecurity.Unencrypted:
+        if security is _TransportSecurity.Unencrypted:
             message += " is unencrypted (TLS disabled)."
-        elif security is TransportSecurity.ServerAuthenticatedTls:
+        elif security is _TransportSecurity.ServerAuthenticatedTls:
             message += " uses one-way TLS. Not presenting a client certificate."
         else:
             message += " uses mutual TLS. Presenting a client certificate."
 
         logger = _get_audit_logger()
         # Mutual TLS is the secure baseline; weaker postures are auditable warnings.
-        if security is TransportSecurity.MutualTls:
+        if security is _TransportSecurity.MutualTls:
             logger.info(message)
         else:
             logger.warning(message)
@@ -183,9 +176,9 @@ def audit_session_connect(driver_name: str, channel: object, connected: bool) ->
 
     Channels this package did not create are ignored, so drivers can call this
     unconditionally. A caller who built their own channel never went through
-    NI-TLS, so there is no transport posture record to pair the outcome with and
+    NI TLS, so there is no transport posture record to pair the outcome with and
     nothing to attest to; auditing it anyway would also register an Event Log
-    source on machines not using NI-TLS at all.
+    source on machines not using NI TLS at all.
     """
     try:
         target = get_channel_target(channel)

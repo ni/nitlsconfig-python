@@ -18,19 +18,19 @@ from nitlsconfig.errors import (
     NitlsconfigCliError,
 )
 
-ALLOWED_SCOPES: Tuple[str, ...] = ("client", "server")
+_ALLOWED_SCOPES: Tuple[str, ...] = ("client", "server")
 
 # Expected JSON root keys from nitlsconfig output.
-ROLE_TO_JSON_ROOT_KEY = {
+_ROLE_TO_JSON_ROOT_KEY = {
     "client": "client",
     "server": "server",
 }
 
 
 # Command templates are based on nitlsconfigcli README and fixture scripts.
-LIST_COMMAND_TEMPLATE: Tuple[str, ...] = ("{role}", "list")
+_LIST_COMMAND_TEMPLATE: Tuple[str, ...] = ("{role}", "list")
 
-CLIENT_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
+_CLIENT_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "--output-format=json",
     "client",
     "batch-read",
@@ -58,7 +58,7 @@ CLIENT_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "trusted_certificates_contents",
 )
 
-SERVER_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
+_SERVER_BATCH_READ_COMMAND_TEMPLATE: Tuple[str, ...] = (
     "--output-format=json",
     "server",
     "batch-read",
@@ -168,10 +168,10 @@ class CertificateLocation:
         return self.to_string()
 
 
-EnumT = TypeVar("EnumT", bound=Enum)
+_EnumT = TypeVar("_EnumT", bound=Enum)
 
 
-def _parse_enum(value: str, enum_cls: type[EnumT], unknown_member: EnumT) -> EnumT:
+def _parse_enum(value: str, enum_cls: type[_EnumT], unknown_member: _EnumT) -> _EnumT:
     "Parse a string value into an Enum member, returning unknown_member if not found."
     try:
         return enum_cls(value)
@@ -196,7 +196,7 @@ class KnownServerData:
     trusted_certificates_contents: str = field()
 
     @classmethod
-    def from_json_obj(cls, obj: dict[str, Any]) -> "KnownServerData":
+    def _from_json_obj(cls, obj: dict[str, Any]) -> "KnownServerData":
         "Parse a known server object from CLI JSON into KnownServerData."
         return cls(
             raw=obj,
@@ -237,7 +237,7 @@ class TrustedCertificateData:
     trusted_certificate_contents: str = field()
 
     @classmethod
-    def from_json_obj(cls, obj: dict[str, Any]) -> "TrustedCertificateData":
+    def _from_json_obj(cls, obj: dict[str, Any]) -> "TrustedCertificateData":
         "Parse a trusted certificate object from CLI JSON into TrustedCertificateData."
         return cls(
             raw=obj,
@@ -250,7 +250,7 @@ class TrustedCertificateData:
 
 
 @dataclass(frozen=True)
-class ServiceData:
+class _ServiceData:
     """Typed wrapper for service objects from CLI JSON."""
 
     raw: dict[str, Any]
@@ -258,21 +258,21 @@ class ServiceData:
     trusted_certificates: list[TrustedCertificateData] = field(default_factory=list)
 
     @classmethod
-    def from_json_obj(cls, obj: dict[str, Any]) -> "ServiceData":
-        "Parse a service object from CLI JSON into a typed ServiceData object."
+    def from_json_obj(cls, obj: dict[str, Any]) -> "_ServiceData":
+        "Parse a service object from CLI JSON into a typed _ServiceData object."
         known_servers_raw = obj.get("known_servers", [])
         known_servers: list[KnownServerData] = []
         if isinstance(known_servers_raw, list):
             for item in known_servers_raw:
                 if isinstance(item, dict):
-                    known_servers.append(KnownServerData.from_json_obj(item))
+                    known_servers.append(KnownServerData._from_json_obj(item))
 
         trusted_certificates_raw = obj.get("trusted_certificates", [])
         trusted_certificates: list[TrustedCertificateData] = []
         if isinstance(trusted_certificates_raw, list):
             for item in trusted_certificates_raw:
                 if isinstance(item, dict):
-                    trusted_certificates.append(TrustedCertificateData.from_json_obj(item))
+                    trusted_certificates.append(TrustedCertificateData._from_json_obj(item))
 
         return cls(raw=obj, known_servers=known_servers, trusted_certificates=trusted_certificates)
 
@@ -284,25 +284,25 @@ class ServiceData:
         return default
 
 
-def build_list_command(role: str) -> Tuple[str, ...]:
+def _build_list_command(role: str) -> Tuple[str, ...]:
     """Build argv for list mode only.
 
     This function does not include executable resolution.
     """
-    return tuple(part.format(role=role) for part in LIST_COMMAND_TEMPLATE)
+    return tuple(part.format(role=role) for part in _LIST_COMMAND_TEMPLATE)
 
 
-def build_batch_read_command(role: str) -> Tuple[str, ...]:
+def _build_batch_read_command(role: str) -> Tuple[str, ...]:
     """Build argv template for batch-read mode only.
 
     The template mirrors existing fixture-generation scripts.
     """
     if role == "client":
-        return CLIENT_BATCH_READ_COMMAND_TEMPLATE
-    return SERVER_BATCH_READ_COMMAND_TEMPLATE
+        return _CLIENT_BATCH_READ_COMMAND_TEMPLATE
+    return _SERVER_BATCH_READ_COMMAND_TEMPLATE
 
 
-def run_nitlsconfig_command(
+def _run_nitlsconfig_command(
     command_args: Tuple[str, ...],
 ) -> str:
     """Run nitlsconfig command and return stdout.
@@ -345,11 +345,11 @@ def run_nitlsconfig_command(
     return completed.stdout
 
 
-def run_nitlsconfig_json_command(
+def _run_nitlsconfig_json_command(
     command_args: Tuple[str, ...],
 ) -> Any:
     """Run nitlsconfig command and parse stdout as JSON."""
-    stdout = run_nitlsconfig_command(
+    stdout = _run_nitlsconfig_command(
         command_args=command_args,
     )
 
@@ -368,24 +368,24 @@ def _list_services(scope: str) -> list[str]:
     Output is parsed line-by-line and normalized by stripping whitespace and
     dropping empty lines.
     """
-    stdout = run_nitlsconfig_command(command_args=build_list_command(scope))
+    stdout = _run_nitlsconfig_command(command_args=_build_list_command(scope))
     return [line.strip() for line in stdout.splitlines() if line.strip()]
 
 
-def _read_services(scope: str) -> list[ServiceData]:
+def _read_services(scope: str) -> list[_ServiceData]:
     """Read full service configurations for the requested scope.
 
     Parsed output preserves the original key casing and values from the CLI JSON.
     """
-    payload = run_nitlsconfig_json_command(command_args=build_batch_read_command(scope))
+    payload = _run_nitlsconfig_json_command(command_args=_build_batch_read_command(scope))
 
     if not isinstance(payload, dict):
         raise InvalidOutputError("nitlsconfig JSON output root must be an object")
 
-    if scope not in ROLE_TO_JSON_ROOT_KEY:
+    if scope not in _ROLE_TO_JSON_ROOT_KEY:
         raise InvalidOutputError(f"Unsupported scope for nitlsconfig JSON output: {scope!r}")
 
-    root_key = ROLE_TO_JSON_ROOT_KEY[scope]
+    root_key = _ROLE_TO_JSON_ROOT_KEY[scope]
     if root_key not in payload:
         raise InvalidOutputError(f"nitlsconfig JSON output missing expected root key: {root_key!r}")
 
@@ -393,10 +393,10 @@ def _read_services(scope: str) -> list[ServiceData]:
     if not isinstance(services, list):
         raise InvalidOutputError(f"nitlsconfig JSON root key {root_key!r} must contain a list")
 
-    normalized: list[ServiceData] = []
+    normalized: list[_ServiceData] = []
     for item in services:
         if isinstance(item, dict):
-            normalized.append(ServiceData.from_json_obj(item))
+            normalized.append(_ServiceData.from_json_obj(item))
         else:
             raise InvalidOutputError("nitlsconfig service entries must be objects")
     return normalized
@@ -416,18 +416,18 @@ class _BaseConfig:
         return _list_services(cls._scope)
 
     @classmethod
-    def _read_all(cls) -> list[ServiceData]:
+    def _read_all(cls) -> list[_ServiceData]:
         return _read_services(cls._scope)
 
     @classmethod
-    def _find_service_data(cls, service_name: str) -> ServiceData:
+    def _find_service_data(cls, service_name: str) -> _ServiceData:
         for item in cls._read_all():
             if item.value("service_name") == service_name:
                 return item
 
         # Keep behavior compatible with minimal list-only service entries.
         if service_name in cls.list_services():
-            return ServiceData(raw={"service_name": service_name})
+            return _ServiceData(raw={"service_name": service_name})
 
         raise InvalidOutputError(f"Service not found: {service_name!r}")
 
@@ -438,16 +438,8 @@ class _BaseConfig:
         return CertificateLocation.from_string(self._value(key))
 
     @property
-    def certificate_mode_raw(self) -> str:
+    def _certificate_mode_raw(self) -> str:
         return self._value("certificate_mode")
-
-    @property
-    def certificate_chain_location_raw(self) -> str:
-        return self._value("certificate_chain_location")
-
-    @property
-    def certificate_chain_contents_raw(self) -> str:
-        return self._value("certificate_chain_contents")
 
 
 class ServerConfig(_BaseConfig):
@@ -459,7 +451,7 @@ class ServerConfig(_BaseConfig):
     def certificate_mode(self) -> ServerCertMode:
         "Parse certificate_mode string into ServerCertMode enum, defaulting to Unknown."
         return _parse_enum(
-            self.certificate_mode_raw,
+            self._certificate_mode_raw,
             ServerCertMode,
             ServerCertMode.Unknown,
         )
@@ -481,7 +473,7 @@ class ServerConfig(_BaseConfig):
 
     @property
     def certificate_key_contents(self) -> str:
-        "Return the raw certificate_key_contents string from the service configuration."
+        "Return the server private key as PEM. Secret material: do not log or persist it."
         return self._value("certificate_key_contents")
 
     @property
@@ -538,7 +530,7 @@ class ClientConfig(_BaseConfig):
                 None,
             )
             if known_server is not None:
-                self._resolved_data = ServiceData(raw=known_server.raw)
+                self._resolved_data = _ServiceData(raw=known_server.raw)
 
     def _value(self, key: str, default: str = "") -> str:
         return self._resolved_data.value(key, default)
@@ -547,7 +539,7 @@ class ClientConfig(_BaseConfig):
     def certificate_mode(self) -> ClientCertMode:
         "Parse certificate_mode string into ClientCertMode enum, defaulting to Unknown."
         return _parse_enum(
-            self.certificate_mode_raw,
+            self._certificate_mode_raw,
             ClientCertMode,
             ClientCertMode.Unknown,
         )
@@ -568,7 +560,7 @@ class ClientConfig(_BaseConfig):
 
     @property
     def certificate_key_contents(self) -> str:
-        "Return the raw certificate_key_contents string from the service configuration."
+        "Return the client private key as PEM. Secret material: do not log or persist it."
         return self._value("certificate_key_contents")
 
     @property
@@ -604,7 +596,7 @@ class ClientConfig(_BaseConfig):
 def nitlsconfig_main(argv: Optional[list[str]] = None) -> int:
     """Console entry point for read-only service listing."""
     parser = argparse.ArgumentParser(prog="nitlsconfig-read")
-    parser.add_argument("scope", choices=ALLOWED_SCOPES)
+    parser.add_argument("scope", choices=_ALLOWED_SCOPES)
     parser.add_argument("command", choices=["list"], nargs="?", default="list")
     args = parser.parse_args(argv)
 

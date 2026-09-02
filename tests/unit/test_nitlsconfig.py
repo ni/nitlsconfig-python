@@ -18,7 +18,7 @@ CLIENT_FIXTURE_PATH = TEST_DIR / "nitlsconfig_client.json"
 SERVER_FIXTURE_PATH = TEST_DIR / "nitlsconfig_server.json"
 
 # Captured before the autouse fixture below replaces it with a fixture-backed fake.
-REAL_RUN_NITLSCONFIG_COMMAND = nitlsconfig_cli.run_nitlsconfig_command
+REAL_RUN_NITLSCONFIG_COMMAND = nitlsconfig_cli._run_nitlsconfig_command
 
 
 class NitlsconfigJsonFixtures(TypedDict):
@@ -67,12 +67,12 @@ def mock_nitlsconfig_command(
     nitlsconfig_json_fixtures: NitlsconfigJsonFixtures,
 ) -> None:
     command_responses: dict[tuple[str, ...], str] = {
-        nitlsconfig_cli.build_list_command("client"): nitlsconfig_json_fixtures["client_list"],
-        nitlsconfig_cli.build_list_command("server"): nitlsconfig_json_fixtures["server_list"],
-        nitlsconfig_cli.build_batch_read_command("client"): nitlsconfig_json_fixtures[
+        nitlsconfig_cli._build_list_command("client"): nitlsconfig_json_fixtures["client_list"],
+        nitlsconfig_cli._build_list_command("server"): nitlsconfig_json_fixtures["server_list"],
+        nitlsconfig_cli._build_batch_read_command("client"): nitlsconfig_json_fixtures[
             "client_json"
         ],
-        nitlsconfig_cli.build_batch_read_command("server"): nitlsconfig_json_fixtures[
+        nitlsconfig_cli._build_batch_read_command("server"): nitlsconfig_json_fixtures[
             "server_json"
         ],
     }
@@ -100,7 +100,7 @@ def mock_nitlsconfig_command(
 
     monkeypatch.setattr(
         nitlsconfig_cli,
-        "run_nitlsconfig_command",
+        "_run_nitlsconfig_command",
         fake_run_nitlsconfig_command,
     )
 
@@ -116,7 +116,7 @@ def test_command_timeout_is_reported_as_a_package_error(
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(nitlsconfig.NitlsconfigError) as excinfo:
-        REAL_RUN_NITLSCONFIG_COMMAND(nitlsconfig_cli.build_list_command("client"))
+        REAL_RUN_NITLSCONFIG_COMMAND(nitlsconfig_cli._build_list_command("client"))
 
     assert isinstance(excinfo.value, nitlsconfig.CommandTimeoutError)
 
