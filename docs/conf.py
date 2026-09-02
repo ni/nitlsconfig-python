@@ -34,8 +34,8 @@ if datetime.datetime.now().year == 2026:
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-version = proj_config["project"]["version"]
-release = ".".join(version.split(".")[:2])
+release = proj_config["project"]["version"]
+version = ".".join(release.split(".")[:2])
 description = proj_config["project"]["description"]
 
 
