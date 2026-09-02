@@ -42,10 +42,17 @@ with nitlsconfig.create_grpc_device_channel("localhost", 31763) as channel:
         ...
 ```
 
-NI driver software provides the NI TLS configuration, and by default it expects mTLS, so the
-channel is mutually authenticated. Falling back to one-way TLS or to an insecure connection
-is an explicit change to that configuration, made through NI Hardware Manager. No code change
-is needed to move between them.
+NI driver software provides the NI TLS configuration. Using `create_grpc_device_channel`
+opts into mTLS.
+
+Before `create_grpc_device_channel` can succeed, use NI Hardware Manager to perform a
+certificate exchange with the remote system. See
+[Managing mTLS](https://www.ni.com/docs/en-US/bundle/hardwaremanager/page/mtls-manage.html)
+for details.
+
+Weakening the security posture to one-way TLS or to an insecure connection
+requires explicitly changing that configuration in NI Hardware Manager. Either way, no
+code change is needed.
 
 The channel is owned by the caller - NI driver APIs never close it.
 

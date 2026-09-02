@@ -288,6 +288,10 @@ def create_grpc_device_channel(
     insecure only when the client's ``server_mode`` has been explicitly set to
     Disabled.
 
+    TLS requires a certificate exchange with the remote system, performed in
+    NI Hardware Manager. See `Managing mTLS
+    <https://www.ni.com/docs/en-US/bundle/hardwaremanager/page/mtls-manage.html>`_.
+
     Args:
         server_address: Host name or address of the NI gRPC Device Server. Also used
             to resolve NI TLS settings specific to this target. IPv6 literals may be
