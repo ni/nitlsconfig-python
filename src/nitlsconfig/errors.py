@@ -32,7 +32,7 @@ class InvalidOutputError(NitlsconfigCliError):
 
 
 class TlsConfigurationError(NitlsconfigError):
-    """Raised when the NI-TLS configuration was read successfully but is invalid.
+    """Raised when the NI TLS configuration was read successfully but is invalid.
 
     Deliberately not a :class:`NitlsconfigCliError`: the CLI worked, and the fix
     is to provision or try again to provision this machine rather than to install

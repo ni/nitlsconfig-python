@@ -7,9 +7,9 @@ import pytest
 
 from nitlsconfig import audit
 from nitlsconfig.audit import (
-    TransportSecurity,
+    _TransportSecurity as TransportSecurity,
+    _audit_transport_posture as audit_transport_posture,
     audit_session_connect,
-    audit_transport_posture,
 )
 from nitlsconfig.channel_tag import tag_channel_target
 

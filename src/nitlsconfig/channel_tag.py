@@ -1,6 +1,6 @@
-"""Marks gRPC channels this package created.
+"""Marks NI gRPC Device channels this package created.
 
-A caller holding only a channel cannot tell whether NI-TLS had any part in
+A caller holding only a channel cannot tell whether NI TLS had any part in
 building it, so the channel factory tags what it creates. Two features read the
 tag: audit records name the address, and connection-error elaboration speaks only
 for channels we built.

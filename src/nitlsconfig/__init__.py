@@ -1,14 +1,8 @@
-"""Python package to read settings from nitlsconfig and build connections from them.
+"""Python package to read settings from nitlsconfig and build NI gRPC Device channels from them.
 
-Reading configuration is pure Python and has no third-party dependencies. The
-gRPC channel factory needs grpcio, which is an optional extra::
-
-    pip install nitlsconfig[grpc]
-
-The gRPC names below are therefore resolved lazily: importing this package never
-imports grpcio, so a caller that only reads NI-TLS configuration does not pay
-for a binary dependency it will not use. Additional transports can be added the
-same way without changing what a bare install requires.
+The gRPC names below are resolved lazily: importing this package never imports
+grpcio, so a caller that only reads NI TLS configuration does not pay for a
+binary dependency it will not use. See the project README for install options.
 """
 
 from importlib.metadata import version

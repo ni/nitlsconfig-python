@@ -1,8 +1,8 @@
-"""Create gRPC channels to the NI gRPC Device Server from NI-TLS (nitlsconfig) configuration.
+"""Create gRPC channels to the NI gRPC Device Server from NI TLS (nitlsconfig) configuration.
 
-Reads the local NI-TLS client configuration for the NI gRPC Device Server and
-produces a :class:`grpc.Channel` that is either secured with TLS/mTLS or, when
-TLS is not configured, a plain insecure channel.
+Reads the local NI TLS client configuration for the NI gRPC Device Server and
+produces a :class:`grpc.Channel` secured with TLS/mTLS, or a plain insecure
+channel when TLS has been explicitly toggled off.
 
 The resulting channel is a normal ``grpc.Channel``. It can be handed directly to
 any NI gRPC Python API, for example::
@@ -26,14 +26,8 @@ a configurable service name can be added later without breaking this signature.
 channel built here, so a driver API can tell the caller that a failure to connect
 may be TLS-related, which gRPC's status codes cannot express on their own.
 
-``server_mode`` Disabled selects a plain connection. Every other mode is treated
-exactly like ``TrustedCertificates``: the server certificate chain is verified
-*and* the hostname is checked. gRPC's Python API cannot relax either check
-independently, since that requires a custom certificate verifier which grpcio
-does not bind in Python, where the TLS surface is limited to
-``grpc.ssl_channel_credentials``. Verifying when asked not to fails closed, so a
-caller who sets ``TrustAlways`` or ``SkipHostnameValidation`` gets a stricter
-connection than requested rather than a weaker one.
+``server_mode`` Disabled selects a plain connection. Every other mode verifies
+the server certificate chain and checks the hostname.
 
 When the server certificate's CN/SAN does not match the dialed host, pass
 ``grpc.ssl_target_name_override`` via ``options`` instead. That substitutes the
@@ -48,9 +42,10 @@ from typing import Any, Optional, Sequence, Tuple
 
 import grpc
 
+from nitlsconfig._service import SERVICE_NAME
 from nitlsconfig.audit import (
-    TransportSecurity,
-    audit_transport_posture,
+    _TransportSecurity,
+    _audit_transport_posture,
 )
 from nitlsconfig.channel_tag import tag_channel_target
 from nitlsconfig.cli import (
@@ -60,7 +55,6 @@ from nitlsconfig.cli import (
     LocationScheme,
 )
 from nitlsconfig.errors import TlsConfigurationError
-from nitlsconfig.service import SERVICE_NAME
 
 __all__ = [
     "RetryPolicy",
@@ -210,8 +204,11 @@ def _load_client_tls_settings(config: ClientConfig) -> Optional[_ClientTlsSettin
     service_name = config.service_name
 
     # Disabled is the only mode that turns TLS off. TrustAlways, SkipHostnameValidation,
-    # and Unknown all fall through to full chain and hostname verification: relaxing
-    # either check is a policy decision for NI-TLS, so this defaults to secure.
+    # and Unknown all fall through to full chain and hostname verification, because gRPC's
+    # Python API cannot relax either check independently: that needs a custom certificate
+    # verifier, which grpcio does not bind in Python, where the TLS surface is limited to
+    # grpc.ssl_channel_credentials. Verifying when asked not to fails closed, so those
+    # callers get a stricter connection than requested rather than a weaker one.
     if config.server_mode == ClientServerMode.Disabled:
         return None
 
@@ -283,17 +280,17 @@ def create_grpc_device_channel(
     options: ChannelOptions = (),
     retry_policy: Optional[RetryPolicy] = None,
 ) -> grpc.Channel:
-    """Create a gRPC channel to ``server_address:server_port`` using NI-TLS configuration.
+    """Create an NI gRPC Device channel to ``server_address:server_port``.
 
-    Reads the NI-TLS client configuration for the NI gRPC Device Server and builds
+    Reads the NI TLS client configuration for the NI gRPC Device Server and builds
     a channel that verifies the server certificate and, when the configuration
-    calls for mutual TLS, also presents the client certificate. Falls back to an
-    insecure channel when the client's ``server_mode`` is Disabled, which is the
-    default until the machine is configured.
+    calls for mutual TLS, also presents the client certificate. The channel is
+    insecure only when the client's ``server_mode`` has been explicitly set to
+    Disabled.
 
     Args:
         server_address: Host name or address of the NI gRPC Device Server. Also used
-            to resolve NI-TLS settings specific to this target. IPv6 literals may be
+            to resolve NI TLS settings specific to this target. IPv6 literals may be
             passed with or without brackets.
         server_port: Port of the NI gRPC Device Server.
         options: gRPC channel arguments, as ``(key, value)`` pairs. Use this to
@@ -320,13 +317,13 @@ def create_grpc_device_channel(
     settings = _load_client_tls_settings(ClientConfig(SERVICE_NAME, server_address))
 
     if settings is None:
-        security = TransportSecurity.Unencrypted
+        security = _TransportSecurity.Unencrypted
     elif settings.present_client_cert:
-        security = TransportSecurity.MutualTls
+        security = _TransportSecurity.MutualTls
     else:
-        security = TransportSecurity.ServerAuthenticatedTls
+        security = _TransportSecurity.ServerAuthenticatedTls
 
-    audit_transport_posture(server_address, security)
+    _audit_transport_posture(server_address, security)
 
     if settings is None:
         channel = grpc.insecure_channel(target, options=channel_options)

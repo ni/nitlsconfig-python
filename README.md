@@ -1,7 +1,7 @@
 # nitlsconfig
 
 Python API that reads nitlsconfig configurations through the `nitlsconfig` command line,
-and builds gRPC client channels from them.
+and builds NI gRPC Device client channels from them.
 
 Installed and imported as `nitlsconfig`; developed at
 [ni/nitlsconfig-python](https://github.com/ni/nitlsconfig-python).
@@ -12,7 +12,7 @@ Installed and imported as `nitlsconfig`; developed at
 
 ## Install
 
-Reading NI-TLS configuration is pure Python and has no third-party dependencies:
+Reading NI TLS configuration is pure Python and has no third-party dependencies:
 
 - `pip install nitlsconfig`
 
@@ -20,11 +20,16 @@ The gRPC channel factory additionally needs grpcio, which is an optional extra:
 
 - `pip install nitlsconfig[grpc]`
 
+Neither install provides the `nitlsconfig` runtime itself. This package reads
+configuration by invoking the `nitlsconfig` command line interface, which ships with NI
+driver software products that support NI TLS. Install a driver that provides it before using
+this package; without it, calls raise `ExecutableNotFoundError`.
+
 ## Creating a gRPC channel
 
-`create_grpc_device_channel` reads the local NI-TLS client configuration for the NI
+`create_grpc_device_channel` reads the local NI TLS client configuration for the NI
 gRPC Device Server and returns a `grpc.Channel` secured accordingly. The
-`server_address` hostname or address is used to select matching target-specific NI-TLS
+`server_address` hostname or address is used to select matching target-specific NI TLS
 settings. Pass the channel straight to any NI gRPC Python API:
 
 ```python
@@ -37,9 +42,12 @@ with nitlsconfig.create_grpc_device_channel("localhost", 31763) as channel:
         ...
 ```
 
-The channel is mutually authenticated, one-way TLS, or insecure depending on how
-the machine is configured; no code change is needed to move between them. The
-channel is owned by the caller - NI driver APIs never close it.
+NI driver software provides the NI TLS configuration, and by default it expects mTLS, so the
+channel is mutually authenticated. Falling back to one-way TLS or to an insecure connection
+is an explicit change to that configuration, made through NI Hardware Manager. No code change
+is needed to move between them.
+
+The channel is owned by the caller - NI driver APIs never close it.
 
 Retries are opt-in:
 
@@ -89,7 +97,6 @@ if servers:
     print(server_info.certificate_key_location.scheme)
     print(server_info.trusted_certificates_location.scheme)
     print(server_info.trusted_certificates_contents)
-    print(server_info.certificate_key_contents)
 
     # Enumerate trusted certificates
     for cert in server_info.trusted_certificates:

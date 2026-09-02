@@ -2,7 +2,7 @@
 name = "nitlsconfig"
 version = "1.0.0a3"
 license = "MIT"
-description = "Python API for reading nitlsconfig configurations and creating gRPC client channels from them"
+description = "Python API for reading nitlsconfig configurations and creating NI gRPC Device client channels from them"
 authors = [{name = "NI", email = "opensource@ni.com"}]
 maintainers = [
   {name = "Philip Thong", email = "philip.thong@emerson.com"},
@@ -26,7 +26,7 @@ classifiers = [
 requires-python = ">=3.9"
 dynamic = ["dependencies"]
 
-# Reading NI-TLS configuration is pure Python. Only nitlsconfig.grpc_channel
+# Reading NI TLS configuration is pure Python. Only nitlsconfig.grpc_channel
 # needs grpcio, so the binary wheel is opt-in. pywin32 rides along with it
 # because audit records are only produced when a channel is created, and the
 # Windows Event Log logging handler cannot be written to without it.
@@ -35,6 +35,7 @@ grpc = ["grpcio>=1.49.0,<2.0", "pywin32>=306; sys_platform == 'win32'"]
 
 [project.urls]
 repository = "https://github.com/ni/nitlsconfig-python"
+documentation = "https://nitlsconfig.readthedocs.io"
 
 [project.scripts]
 nitlsconfig-read = "nitlsconfig.cli:nitlsconfig_main"
