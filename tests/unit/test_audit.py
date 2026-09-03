@@ -1,7 +1,11 @@
 "Pytests for nitlsconfig.audit."
 
+import importlib
 import logging
-from typing import Iterator, List
+import logging.handlers
+import sys
+from types import SimpleNamespace
+from typing import Any, Iterator, List, Tuple
 
 import pytest
 
@@ -15,6 +19,7 @@ from nitlsconfig.channel_tag import tag_channel_target
 
 SERVICE = "ni-grpc-device"
 HOST = "localhost"
+make_logging_handler = audit._make_logging_handler
 
 
 # We utilize a test-specific logging handler to capture audit records for test assertions.
@@ -233,6 +238,203 @@ def test___same_service_requested_twice___reuses_one_logger(
     logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE}.Client")
     assert len(recorded.records) == 2
     assert [h for h in logger.handlers if h is recorded] == [recorded]
+
+
+def test___windows_platform___creates_windows_event_log_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    windows_handler = RecordingHandler()
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(audit, "_WindowsEventLogHandler", lambda source: windows_handler)
+
+    assert make_logging_handler() is windows_handler
+
+
+def test___linux_platform___creates_syslog_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    syslog_handler = RecordingHandler()
+    calls: List[Tuple[object, object]] = []
+
+    class FakeSysLogHandler:
+        LOG_DAEMON = 3
+
+        def __new__(cls, address: object, facility: object) -> Any:
+            calls.append((address, facility))
+            return syslog_handler
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(logging.handlers, "SysLogHandler", FakeSysLogHandler)
+
+    assert make_logging_handler() is syslog_handler
+    assert calls == [("/dev/log", FakeSysLogHandler.LOG_DAEMON)]
+
+
+def test___unsupported_platform___disables_audit_logging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "unsupported")
+
+    assert isinstance(make_logging_handler(), logging.NullHandler)
+
+
+@pytest.mark.parametrize(
+    "level, expected_event_type, expected_category",
+    [
+        (logging.INFO, 4, 2),
+        (logging.WARNING, 2, 3),
+        (logging.ERROR, 1, 4),
+    ],
+)
+def test___windows_handler___matches_spdlog_event_type_category_and_message_id(
+    monkeypatch: pytest.MonkeyPatch,
+    level: int,
+    expected_event_type: int,
+    expected_category: int,
+) -> None:
+    # Capture the direct win32evtlog calls in memory. The fake deliberately has no
+    # AddSourceToRegistry API: the source is pre-registered, and this package must
+    # never create or overwrite an Event Log registry key.
+    registered: List[Tuple[object, str]] = []
+    reported: List[Tuple[object, ...]] = []
+    deregistered: List[object] = []
+    event_source = object()
+    user_sid = object()
+
+    class Token:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def Close(self) -> None:  # noqa: N802 - pywin32 API
+            self.closed = True
+
+    token = Token()
+
+    def register_event_source(server: object, source: str) -> object:
+        registered.append((server, source))
+        return event_source
+
+    # Create a fake win32evtlog module with the constants and functions used by the handler.
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=register_event_source,
+        ReportEvent=lambda *args: reported.append(args),
+        DeregisterEventSource=lambda handle: deregistered.append(handle),
+    )
+    modules = {
+        "win32api": SimpleNamespace(GetCurrentProcess=lambda: "process"),
+        "win32con": SimpleNamespace(TOKEN_QUERY=8),
+        "win32evtlog": event_log,
+        "win32security": SimpleNamespace(
+            TokenUser=1,
+            OpenProcessToken=lambda process, access: token,
+            GetTokenInformation=lambda handle, information_class: (user_sid, 0),
+        ),
+    }
+    # Keep the test platform-independent and prevent it from writing a real Windows event.
+    monkeypatch.setattr(importlib, "import_module", modules.__getitem__)
+
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    handler.setFormatter(logging.Formatter("[ni-grpc-device][Client] %(message)s"))
+    record = logging.LogRecord(
+        "nitlsconfig.audit",  # Logger name recorded with the event.
+        level,  # Python level mapped to the equivalent Windows and spdlog values.
+        __file__,  # Source pathname required by LogRecord, but not sent to Event Log.
+        1,  # Source line required by LogRecord, but not sent to Event Log.
+        "session failed",  # Message formatted into the Event Log insertion string.
+        (),  # No %-formatting arguments are needed for this message.
+        None,  # No exception information is associated with this record.
+    )
+
+    handler.emit(record)
+
+    # RegisterEventSource resolves the pre-registered source; None selects the local
+    # Windows machine.
+    assert registered == [(None, SERVICE)]
+    # This source uses mscoree.dll as its EventMessageFile. Its generic event ID 1000
+    # renders the first insertion string as the complete description, avoiding Event
+    # Viewer's "message was not found in the message table" fallback.
+    assert reported == [
+        (
+            event_source,  # Handle returned by RegisterEventSource.
+            expected_event_type,  # Windows information or error classification.
+            expected_category,  # Matches the spdlog level used as its category.
+            1000,  # mscoree.dll event ID 1000 renders the first insertion string literally.
+            user_sid,  # Current process user's security identifier.
+            ["[ni-grpc-device][Client] session failed"],  # Complete event description.
+            None,  # No binary event data.
+        )
+    ]
+    # Every registered source handle must be released after the event is reported.
+    assert deregistered == [event_source]
+    assert token.closed
+
+
+def test___windows_user_sid_unavailable___still_reports_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reported: List[Tuple[object, ...]] = []
+    event_source = object()
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=lambda server, source: event_source,
+        ReportEvent=lambda *args: reported.append(args),
+        DeregisterEventSource=lambda handle: None,
+    )
+
+    def import_module(name: str) -> object:
+        if name == "win32evtlog":
+            return event_log
+        raise OSError("process token is unavailable")
+
+    monkeypatch.setattr(importlib, "import_module", import_module)
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    record = logging.LogRecord("nitlsconfig.audit", logging.INFO, __file__, 1, "message", (), None)
+
+    handler.emit(record)
+
+    assert reported[0][4] is None
+
+
+def test___windows_event_log_failure___is_quiet_and_releases_source(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    event_source = object()
+    deregistered: List[object] = []
+
+    def report_event(*args: object) -> None:
+        # Simulate a transient Windows Event Log failure after the source handle opens.
+        raise OSError("Event Log is unavailable")
+
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=lambda server, source: event_source,
+        ReportEvent=report_event,
+        DeregisterEventSource=lambda handle: deregistered.append(handle),
+    )
+    monkeypatch.setattr(importlib, "import_module", lambda name: event_log)
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    monkeypatch.setattr(audit, "_make_logging_handler", lambda: handler)
+    # Handler.handleError() prints to stderr when this is true. The Windows handler must
+    # instead let the outer audit boundary swallow the failure quietly.
+    monkeypatch.setattr(logging, "raiseExceptions", True)
+    reset_logger()
+
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
+
+    # The handler's finally block must release a successfully opened source even when
+    # ReportEvent fails.
+    assert deregistered == [event_source]
+    # Regression check: audit sink failures must not leak diagnostics or audit text into
+    # the host application's stderr.
+    assert capsys.readouterr().err == ""
 
 
 def test___logging_handler_cannot_be_created___does_not_raise(
