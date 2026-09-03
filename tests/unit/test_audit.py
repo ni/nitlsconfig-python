@@ -1,7 +1,11 @@
 "Pytests for nitlsconfig.audit."
 
+import importlib
 import logging
-from typing import Iterator, List
+import logging.handlers
+import sys
+from types import SimpleNamespace
+from typing import Any, Iterator, List, Tuple
 
 import pytest
 
@@ -15,6 +19,7 @@ from nitlsconfig.channel_tag import tag_channel_target
 
 SERVICE = "ni-grpc-device"
 HOST = "localhost"
+make_logging_handler = audit._make_logging_handler
 
 
 # We utilize a test-specific logging handler to capture audit records for test assertions.
@@ -233,6 +238,106 @@ def test___same_service_requested_twice___reuses_one_logger(
     logger = logging.getLogger(f"nitlsconfig.audit.{SERVICE}.Client")
     assert len(recorded.records) == 2
     assert [h for h in logger.handlers if h is recorded] == [recorded]
+
+
+def test___windows_platform___creates_windows_event_log_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    windows_handler = RecordingHandler()
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(audit, "_WindowsEventLogHandler", lambda source: windows_handler)
+
+    assert make_logging_handler() is windows_handler
+
+
+def test___linux_platform___creates_syslog_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    syslog_handler = RecordingHandler()
+    calls: List[Tuple[object, object]] = []
+
+    class FakeSysLogHandler:
+        LOG_DAEMON = 3
+
+        def __new__(cls, address: object, facility: object) -> Any:
+            calls.append((address, facility))
+            return syslog_handler
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(logging.handlers, "SysLogHandler", FakeSysLogHandler)
+
+    assert make_logging_handler() is syslog_handler
+    assert calls == [("/dev/log", FakeSysLogHandler.LOG_DAEMON)]
+
+
+def test___unsupported_platform___disables_audit_logging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "unsupported")
+
+    assert isinstance(make_logging_handler(), logging.NullHandler)
+
+
+def test___windows_handler___uses_preregistered_source_and_literal_message_event_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Capture the direct win32evtlog calls in memory. The fake deliberately has no
+    # AddSourceToRegistry API: the source is pre-registered, and this package must
+    # never create or overwrite an Event Log registry key.
+    registered: List[Tuple[object, str]] = []
+    reported: List[Tuple[object, ...]] = []
+    deregistered: List[object] = []
+    event_source = object()
+
+    def register_event_source(server: object, source: str) -> object:
+        registered.append((server, source))
+        return event_source
+
+    # Create a fake win32evtlog module with the constants and functions used by the handler.
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=register_event_source,
+        ReportEvent=lambda *args: reported.append(args),
+        DeregisterEventSource=lambda handle: deregistered.append(handle),
+    )
+    # Keep the test platform-independent and prevent it from writing a real Windows event.
+    monkeypatch.setattr(importlib, "import_module", lambda name: event_log)
+
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    handler.setFormatter(logging.Formatter("[ni-grpc-device][Client] %(message)s"))
+    record = logging.LogRecord(
+        "nitlsconfig.audit",  # Logger name recorded with the event.
+        logging.ERROR,  # Python level that must map to EVENTLOG_ERROR_TYPE.
+        __file__,  # Source pathname required by LogRecord, but not sent to Event Log.
+        1,  # Source line required by LogRecord, but not sent to Event Log.
+        "session failed",  # Message formatted into the Event Log insertion string.
+        (),  # No %-formatting arguments are needed for this message.
+        None,  # No exception information is associated with this record.
+    )
+
+    handler.emit(record)
+
+    # RegisterEventSource resolves the pre-registered source; None selects the local
+    # Windows machine.
+    assert registered == [(None, SERVICE)]
+    # This source uses mscoree.dll as its EventMessageFile. Its generic event ID 0
+    # renders the first insertion string as the complete description, avoiding Event
+    # Viewer's "message was not found in the message table" fallback.
+    assert reported == [
+        (
+            event_source,  # Handle returned by RegisterEventSource.
+            event_log.EVENTLOG_ERROR_TYPE,  # ERROR maps to a Windows error event.
+            0,  # No event category is configured for this source.
+            0,  # mscoree.dll event ID 0 renders the first insertion string literally.
+            None,  # No user security identifier is associated with the event.
+            ["[ni-grpc-device][Client] session failed"],  # Complete event description.
+            None,  # No binary event data.
+        )
+    ]
+    # Every registered source handle must be released after the event is reported.
+    assert deregistered == [event_source]
 
 
 def test___logging_handler_cannot_be_created___does_not_raise(

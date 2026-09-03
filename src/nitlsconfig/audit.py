@@ -11,10 +11,12 @@ the initialize RPC calls :func:`audit_session_connect` itself.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import sys
 import threading
 from enum import Enum
+from typing import Any
 
 from nitlsconfig._service import SERVICE_NAME
 from nitlsconfig.channel_tag import get_channel_target
@@ -37,6 +39,11 @@ from nitlsconfig.channel_tag import get_channel_target
 # below, because those do cross a trust boundary.
 
 _ROLE = "Client"
+# This source uses mscoree.dll as its EventMessageFile. Event ID 0 selects its
+# generic literal-message template, which renders the complete first insertion
+# string as the event description. Other IDs can produce Event Viewer's
+# "message was not found in the message table" fallback instead.
+_WINDOWS_EVENT_ID = 0
 
 
 class _TransportSecurity(Enum):
@@ -58,6 +65,43 @@ _MAX_FIELD_LENGTH = 256
 # The quote is here because messages wrap every field in single quotes; without it
 # a value can close the quote and append text that reads as part of our message.
 _ESCAPES = {"\\": "\\\\", "'": "\\'", "\r": "\\r", "\n": "\\n"}
+
+
+class _WindowsEventLogHandler(logging.Handler):
+    """Write to a pre-registered Windows Event Log source."""
+
+    def __init__(self, source_name: str) -> None:
+        super().__init__()
+        self._source_name = source_name
+        self._event_log: Any = importlib.import_module("win32evtlog")
+        self._event_types = {
+            logging.DEBUG: self._event_log.EVENTLOG_INFORMATION_TYPE,
+            logging.INFO: self._event_log.EVENTLOG_INFORMATION_TYPE,
+            logging.WARNING: self._event_log.EVENTLOG_WARNING_TYPE,
+            logging.ERROR: self._event_log.EVENTLOG_ERROR_TYPE,
+            logging.CRITICAL: self._event_log.EVENTLOG_ERROR_TYPE,
+        }
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit one record without creating or changing Event Log registry keys."""
+        event_source = None
+        try:
+            event_source = self._event_log.RegisterEventSource(None, self._source_name)
+            event_type = self._event_types.get(record.levelno, self._event_log.EVENTLOG_ERROR_TYPE)
+            self._event_log.ReportEvent(
+                event_source,
+                event_type,
+                0,
+                _WINDOWS_EVENT_ID,
+                None,
+                [self.format(record)],
+                None,
+            )
+        except Exception:
+            self.handleError(record)
+        finally:
+            if event_source is not None:
+                self._event_log.DeregisterEventSource(event_source)
 
 
 def _audit_field(value: object) -> str:
@@ -88,6 +132,9 @@ def _audit_field(value: object) -> str:
 def _make_logging_handler() -> logging.Handler:
     """Create the platform audit logging handler.
 
+    Windows uses the Windows Event Log and Linux uses syslog. Audit logging is
+    intentionally disabled on every other platform.
+
     Falls back to a null logging handler when the platform log is unreachable.
     That keeps audit records out of stderr, which ``logging`` would otherwise
     fall back to for a logger that has no logging handler of its own.
@@ -95,13 +142,14 @@ def _make_logging_handler() -> logging.Handler:
     try:
         # "win32" is the value on every Windows build, 64-bit included; there is no "win64".
         if sys.platform == "win32":
-            from logging.handlers import NTEventLogHandler
+            return _WindowsEventLogHandler(SERVICE_NAME)
 
-            return NTEventLogHandler(SERVICE_NAME)
+        if sys.platform.startswith("linux"):
+            from logging.handlers import SysLogHandler
 
-        from logging.handlers import SysLogHandler
+            return SysLogHandler(address="/dev/log", facility=SysLogHandler.LOG_DAEMON)
 
-        return SysLogHandler(address="/dev/log", facility=SysLogHandler.LOG_DAEMON)
+        return logging.NullHandler()
     except Exception:
         # The platform logging handler failed, not `logging` itself; this diagnostic
         # goes to the host application's ordinary logger, never to the audit channel.
@@ -177,8 +225,7 @@ def audit_session_connect(driver_name: str, channel: object, connected: bool) ->
     Channels this package did not create are ignored, so drivers can call this
     unconditionally. A caller who built their own channel never went through
     NI TLS, so there is no transport posture record to pair the outcome with and
-    nothing to attest to; auditing it anyway would also register an Event Log
-    source on machines not using NI TLS at all.
+    nothing to attest to.
     """
     try:
         target = get_channel_target(channel)
