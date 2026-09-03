@@ -278,8 +278,18 @@ def test___unsupported_platform___disables_audit_logging(
     assert isinstance(make_logging_handler(), logging.NullHandler)
 
 
-def test___windows_handler___uses_preregistered_source_and_literal_message_event_id(
+@pytest.mark.parametrize(
+    "level, expected_event_type, expected_category",
+    [
+        (logging.INFO, 4, 2),
+        (logging.ERROR, 1, 4),
+    ],
+)
+def test___windows_handler___matches_spdlog_event_type_category_and_message_id(
     monkeypatch: pytest.MonkeyPatch,
+    level: int,
+    expected_event_type: int,
+    expected_category: int,
 ) -> None:
     # Capture the direct win32evtlog calls in memory. The fake deliberately has no
     # AddSourceToRegistry API: the source is pre-registered, and this package must
@@ -288,6 +298,16 @@ def test___windows_handler___uses_preregistered_source_and_literal_message_event
     reported: List[Tuple[object, ...]] = []
     deregistered: List[object] = []
     event_source = object()
+    user_sid = object()
+
+    class Token:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def Close(self) -> None:  # noqa: N802 - pywin32 API
+            self.closed = True
+
+    token = Token()
 
     def register_event_source(server: object, source: str) -> object:
         registered.append((server, source))
@@ -302,14 +322,24 @@ def test___windows_handler___uses_preregistered_source_and_literal_message_event
         ReportEvent=lambda *args: reported.append(args),
         DeregisterEventSource=lambda handle: deregistered.append(handle),
     )
+    modules = {
+        "win32api": SimpleNamespace(GetCurrentProcess=lambda: "process"),
+        "win32con": SimpleNamespace(TOKEN_QUERY=8),
+        "win32evtlog": event_log,
+        "win32security": SimpleNamespace(
+            TokenUser=1,
+            OpenProcessToken=lambda process, access: token,
+            GetTokenInformation=lambda handle, information_class: (user_sid, 0),
+        ),
+    }
     # Keep the test platform-independent and prevent it from writing a real Windows event.
-    monkeypatch.setattr(importlib, "import_module", lambda name: event_log)
+    monkeypatch.setattr(importlib, "import_module", modules.__getitem__)
 
     handler = audit._WindowsEventLogHandler(SERVICE)
     handler.setFormatter(logging.Formatter("[ni-grpc-device][Client] %(message)s"))
     record = logging.LogRecord(
         "nitlsconfig.audit",  # Logger name recorded with the event.
-        logging.ERROR,  # Python level that must map to EVENTLOG_ERROR_TYPE.
+        level,  # Python level mapped to the equivalent Windows and spdlog values.
         __file__,  # Source pathname required by LogRecord, but not sent to Event Log.
         1,  # Source line required by LogRecord, but not sent to Event Log.
         "session failed",  # Message formatted into the Event Log insertion string.
@@ -322,22 +352,51 @@ def test___windows_handler___uses_preregistered_source_and_literal_message_event
     # RegisterEventSource resolves the pre-registered source; None selects the local
     # Windows machine.
     assert registered == [(None, SERVICE)]
-    # This source uses mscoree.dll as its EventMessageFile. Its generic event ID 0
+    # This source uses mscoree.dll as its EventMessageFile. Its generic event ID 1000
     # renders the first insertion string as the complete description, avoiding Event
     # Viewer's "message was not found in the message table" fallback.
     assert reported == [
         (
             event_source,  # Handle returned by RegisterEventSource.
-            event_log.EVENTLOG_ERROR_TYPE,  # ERROR maps to a Windows error event.
-            0,  # No event category is configured for this source.
-            0,  # mscoree.dll event ID 0 renders the first insertion string literally.
-            None,  # No user security identifier is associated with the event.
+            expected_event_type,  # Windows information or error classification.
+            expected_category,  # Matches the spdlog level used as its category.
+            1000,  # mscoree.dll event ID 1000 renders the first insertion string literally.
+            user_sid,  # Current process user's security identifier.
             ["[ni-grpc-device][Client] session failed"],  # Complete event description.
             None,  # No binary event data.
         )
     ]
     # Every registered source handle must be released after the event is reported.
     assert deregistered == [event_source]
+    assert token.closed
+
+
+def test___windows_user_sid_unavailable___still_reports_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reported: List[Tuple[object, ...]] = []
+    event_source = object()
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=lambda server, source: event_source,
+        ReportEvent=lambda *args: reported.append(args),
+        DeregisterEventSource=lambda handle: None,
+    )
+
+    def import_module(name: str) -> object:
+        if name == "win32evtlog":
+            return event_log
+        raise OSError("process token is unavailable")
+
+    monkeypatch.setattr(importlib, "import_module", import_module)
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    record = logging.LogRecord("nitlsconfig.audit", logging.INFO, __file__, 1, "message", (), None)
+
+    handler.emit(record)
+
+    assert reported[0][4] is None
 
 
 def test___windows_event_log_failure___is_quiet_and_releases_source(

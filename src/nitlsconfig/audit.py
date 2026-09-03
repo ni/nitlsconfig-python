@@ -39,11 +39,21 @@ from nitlsconfig.channel_tag import get_channel_target
 # below, because those do cross a trust boundary.
 
 _ROLE = "Client"
-# This source uses mscoree.dll as its EventMessageFile. Event ID 0 selects its
+# This source uses mscoree.dll as its EventMessageFile. Event ID 1000 selects its
 # generic literal-message template, which renders the complete first insertion
 # string as the event description. Other IDs can produce Event Viewer's
 # "message was not found in the message table" fallback instead.
-_WINDOWS_EVENT_ID = 0
+_WINDOWS_EVENT_ID = 1000
+
+# Match spdlog's Windows Event Log categories, which use its level enum values:
+# trace=0, debug=1, info=2, warn=3, err=4, critical=5.
+_WINDOWS_EVENT_CATEGORIES = {
+    logging.DEBUG: 1,
+    logging.INFO: 2,
+    logging.WARNING: 3,
+    logging.ERROR: 4,
+    logging.CRITICAL: 5,
+}
 
 
 class _TransportSecurity(Enum):
@@ -74,6 +84,7 @@ class _WindowsEventLogHandler(logging.Handler):
         super().__init__()
         self._source_name = source_name
         self._event_log: Any = importlib.import_module("win32evtlog")
+        self._user_sid = self._get_current_user_sid()
         self._event_types = {
             logging.DEBUG: self._event_log.EVENTLOG_INFORMATION_TYPE,
             logging.INFO: self._event_log.EVENTLOG_INFORMATION_TYPE,
@@ -82,18 +93,41 @@ class _WindowsEventLogHandler(logging.Handler):
             logging.CRITICAL: self._event_log.EVENTLOG_ERROR_TYPE,
         }
 
+    @staticmethod
+    def _get_current_user_sid() -> Any:
+        """Return the current process token's user SID, or None if unavailable."""
+        try:
+            win32api = importlib.import_module("win32api")
+            win32con = importlib.import_module("win32con")
+            win32security = importlib.import_module("win32security")
+            token = win32security.OpenProcessToken(
+                win32api.GetCurrentProcess(), win32con.TOKEN_QUERY
+            )
+            try:
+                user_sid, _ = win32security.GetTokenInformation(token, win32security.TokenUser)
+                return user_sid
+            finally:
+                token.Close()
+        except Exception:
+            # A missing SID must not prevent the audit event itself from being recorded.
+            return None
+
     def emit(self, record: logging.LogRecord) -> None:
         """Emit one record without creating or changing Event Log registry keys."""
         event_source = None
         try:
             event_source = self._event_log.RegisterEventSource(None, self._source_name)
             event_type = self._event_types.get(record.levelno, self._event_log.EVENTLOG_ERROR_TYPE)
+            event_category = _WINDOWS_EVENT_CATEGORIES.get(
+                record.levelno,
+                4,  # Unknown/custom Python levels default to spdlog's error category.
+            )
             self._event_log.ReportEvent(
                 event_source,
                 event_type,
-                0,
+                event_category,
                 _WINDOWS_EVENT_ID,
-                None,
+                self._user_sid,
                 [self.format(record)],
                 None,
             )
