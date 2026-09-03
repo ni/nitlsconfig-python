@@ -97,8 +97,6 @@ class _WindowsEventLogHandler(logging.Handler):
                 [self.format(record)],
                 None,
             )
-        except Exception:
-            self.handleError(record)
         finally:
             if event_source is not None:
                 self._event_log.DeregisterEventSource(event_source)

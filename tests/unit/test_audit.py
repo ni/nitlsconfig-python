@@ -340,6 +340,43 @@ def test___windows_handler___uses_preregistered_source_and_literal_message_event
     assert deregistered == [event_source]
 
 
+def test___windows_event_log_failure___is_quiet_and_releases_source(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    event_source = object()
+    deregistered: List[object] = []
+
+    def report_event(*args: object) -> None:
+        # Simulate a transient Windows Event Log failure after the source handle opens.
+        raise OSError("Event Log is unavailable")
+
+    event_log = SimpleNamespace(
+        EVENTLOG_INFORMATION_TYPE=4,
+        EVENTLOG_WARNING_TYPE=2,
+        EVENTLOG_ERROR_TYPE=1,
+        RegisterEventSource=lambda server, source: event_source,
+        ReportEvent=report_event,
+        DeregisterEventSource=lambda handle: deregistered.append(handle),
+    )
+    monkeypatch.setattr(importlib, "import_module", lambda name: event_log)
+    handler = audit._WindowsEventLogHandler(SERVICE)
+    monkeypatch.setattr(audit, "_make_logging_handler", lambda: handler)
+    # Handler.handleError() prints to stderr when this is true. The Windows handler must
+    # instead let the outer audit boundary swallow the failure quietly.
+    monkeypatch.setattr(logging, "raiseExceptions", True)
+    reset_logger()
+
+    audit_transport_posture(HOST, TransportSecurity.MutualTls)
+
+    # The handler's finally block must release a successfully opened source even when
+    # ReportEvent fails.
+    assert deregistered == [event_source]
+    # Regression check: audit sink failures must not leak diagnostics or audit text into
+    # the host application's stderr.
+    assert capsys.readouterr().err == ""
+
+
 def test___logging_handler_cannot_be_created___does_not_raise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
