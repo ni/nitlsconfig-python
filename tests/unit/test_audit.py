@@ -282,6 +282,7 @@ def test___unsupported_platform___disables_audit_logging(
     "level, expected_event_type, expected_category",
     [
         (logging.INFO, 4, 2),
+        (logging.WARNING, 2, 3),
         (logging.ERROR, 1, 4),
     ],
 )
