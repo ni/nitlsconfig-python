@@ -59,7 +59,10 @@ mypy = ">=1.0"
 pyright = { version = ">=1.1.400", extras = ["nodejs"] }
 
 [tool.poetry.group.test.dependencies]
-pytest = ">=7.2"
+pytest = [
+  { version = ">=7.2", python = "<3.10" },
+  { version = ">=9.1.1", python = ">=3.10" },
+]
 pytest-cov = ">=4.0"
 pytest-mock = ">=3.0"
 pytest-env = ">=1.0,<2.0"
