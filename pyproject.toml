@@ -1,6 +1,6 @@
 [project]
 name = "nitlsconfig"
-version = "1.0.0a4"
+version = "1.0.0"
 license = "MIT"
 description = "Python API for reading nitlsconfig configurations and creating NI gRPC Device client channels from them"
 authors = [{name = "NI", email = "opensource@ni.com"}]
@@ -10,7 +10,7 @@ maintainers = [
 readme = "README.md"
 keywords = ["nitlsconfig", "tls", "mtls", "grpc", "configuration"]
 classifiers = [
-	"Development Status :: 3 - Alpha",
+	"Development Status :: 5 - Production/Stable",
 	"Intended Audience :: Developers",
 	"License :: OSI Approved :: MIT License",
 	"Operating System :: Microsoft :: Windows",
