@@ -4,14 +4,11 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  pull-requests: write
+  contents: write
 
 jobs:
   auto_approve_merge:
-    # Job level permissions are required to approve and merge PRs
-    permissions:
-      pull-requests: write
-      contents: write
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
@@ -25,4 +22,3 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
