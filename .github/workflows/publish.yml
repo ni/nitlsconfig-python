@@ -98,4 +98,4 @@ jobs:
       - name: Set up Poetry
         uses: ni/python-actions/setup-poetry@36d77b6a215e106c33e30638943d5bc5233bef2f # v0.10.0
       - name: Update project version
-        uses: ni/python-actions/update-project-version@dee640bba235ae28fdc6b7337c643bd06358ae90 # v0.9.0
+        uses: ni/python-actions/update-project-version@36d77b6a215e106c33e30638943d5bc5233bef2f # v0.10.0
