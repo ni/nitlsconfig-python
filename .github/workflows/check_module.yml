@@ -26,7 +26,7 @@ jobs:
       - name: Set up Poetry
         uses: ni/python-actions/setup-poetry@36d77b6a215e106c33e30638943d5bc5233bef2f # v0.10.0
       - name: Analyze Python Project
-        uses: ni/python-actions/analyze-project@36d77b6a215e106c33e30638943d5bc5233bef2f # v0.10.0
+        uses: ni/python-actions/analyze-project@edaf1454897cb4cd5f6fc0757cb62dee455e57fd # v0.10.1
         with:
           install-args: "--with test --with lint --all-extras"
       - name: Bandit security checks
